@@ -38,7 +38,7 @@ App must have `package.json` or `.degu.json` file to run the main
 `/key`
 
 ### API
-Api is listening on port 8125
+By default API is enabled and listening on port 8125, it could be changed.
 
 Endpoints:
 - `reload-degu-file`
@@ -64,6 +64,7 @@ for example setting github webhooks to `git/updateAndRestart`
     [ "npm", "install" ]
    ],
   "api": {
+    "port": 8125,
     "enable": true,
     "prefix": "/",
     "whiteList": [
