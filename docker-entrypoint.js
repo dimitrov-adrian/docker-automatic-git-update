@@ -76,9 +76,11 @@ const gitUpdate = function (callback) {
 
 const gitInitSync = function (url) {
   console.log('Initialize...')
+
   if (!fs.existsSync('/app')) {
     return
   }
+
   if (fs.existsSync('/app/.git')) {
     childProcess.spawnSync('git',
       ['reset', '--hard', 'HEAD^1'],
@@ -121,6 +123,10 @@ http.createServer(function (request, response) {
   }
   response.end('ok')
 }).listen(8125)
+
+if (fs.existsSync('/root/.ssh/id_rsa')) {
+  fs.chmodSync('/root/.ssh/id_rsa', 0o400)
+}
 
 if (args[0]) {
   gitInitSync(args[0])
