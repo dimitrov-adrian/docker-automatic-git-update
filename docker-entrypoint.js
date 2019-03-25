@@ -1,11 +1,32 @@
-const http = require('http')
 const fs = require('fs')
 const childProcess = require('child_process')
-const args = process.argv.slice(2)
-let proc
 
+/**
+ * argv
+ */
+const args = process.argv.slice(2)
+
+/**
+ * Main process holder.
+ */
+let mainProcess
+
+/**
+ * Return object of options from degu file
+ *
+ * @returns {{}}
+ */
 let deguOpts = {}
 
+/**
+ *
+ */
+const repositoryUrl = args[0]
+
+/**
+ * Reload degu (/app/.degu.json) and reset deguOpts
+ * @returns {boolean}
+ */
 const reloadDeguFile = function() {
   deguOpts = {
     env: {},
@@ -23,80 +44,144 @@ const reloadDeguFile = function() {
   const deguFile = '/app/.degu.json'
   if (fs.existsSync(deguFile)) {
     console.log(`Info: Load ${deguFile}`)
-    deguOpts = {
-      ...deguOpts,
-      ...require(deguFile),
+    deguFileOpts = { ...deguOpts, ...require(deguFile) }
+    // Because have no recursive merge, and we have small ammount of keys,
+    // no need of external library.
+    if (deguFileOpts.env) {
+      deguOpts.env = { ...deguOpts.env, ...deguFileOpts.env }
     }
+    if (deguFileOpts.api) {
+      deguOpts.api = { ...deguOpts.api, ...deguFileOpts.api }
+    }
+    deguOpts = { ...deguOpts, ...deguFileOpts }
+    return true
   } else {
     console.log(`Info: No ${deguFile}`)
+    return false
   }
-
-  console.log('Degu Opts:', deguOpts)
 }
 
-const startManager = function(port) {
-  console.log(`Info: Starting web management api on port ${port} ...`)
+/**
+ * Chmodding /key file with proper modes.
+ */
+const chmodKeyFileSync = function() {
+  if (fs.existsSync('/key')) {
+    try {
+      fs.chmodSync('/key', 0o400)
+      return true
+    } catch(err) {
+      console.error('Warning: Cannot chmod key file "/key", ensure the passed key file have recommended modes 0400.')
+      return false
+    }
+  } else {
+    console.error('Info: No private key file "/key"')
+    return false
+  }
+}
+
+/**
+ * Start web manager API
+ *
+ * @param port
+ */
+const startManagerApi = function(port) {
+
+  const http = require('http')
   const prefix = deguOpts.api.prefix || ''
-  http.createServer(function (request, response) {
+  console.log(`Info: Starting web management api on port ${port} ...`)
+
+  http.createServer( (request, response) => {
+
+    if (!deguOpts.api.enable) {
+      return
+    }
 
     const ip = request.connection.remoteAddress ||
       request.socket.remoteAddress ||
       request.connection.socket.remoteAddress
 
     if (deguOpts.api.whitelist && deguOpts.api.whitelist.length > 0) {
-      if (!deguOpts.api.whitelist.indexOf(ip)) {
+      if (deguOpts.api.whitelist.indexOf(ip) === -1) {
         response.end('Error: IP not allowed')
+        console.error(`Warning: Rejected API request ${request.url} from ${ip}`)
         return
       }
     }
 
-    if (request.method === 'POST') {
-      if (request.url === prefix + 'reload-degu-file') {
-        reloadDeguFile()
-      } else if (request.url === prefix + 'restart') {
-        response.end('OK: Queued.')
-        restartMainProcess()
-      } else if (request.url === prefix + 'exit') {
-        response.end('OK: Queued.')
-        killMainProcess()
-      } else if (request.url === prefix + 'git/update') {
-        response.end('OK: Queued.')
-        gitUpdate()
-      } else if (request.url === prefix + 'git/updateAndRestart') {
-        response.end('OK: Queued.')
-        gitUpdate(restartMainProcess)
-      } else if (request.url === prefix + 'git/updateAndExit') {
-        response.end('OK: Queued.')
-        gitUpdate(killMainProcess)
-      } else {
-        response.end('Error: No such command.')
-      }
-    } else {
-      response.end('Error: Method not allowed.')
+    if (request.method !== 'POST') {
+      response.end('Error: Method not allowed')
+      return
     }
-  }).listen(port)
+
+    if (request.url === prefix + 'reload-degu-file') {
+      reloadDeguFile()
+    } else if (request.url === prefix + 'restart') {
+      response.end('OK: restart')
+      restart()
+    } else if (request.url === prefix + 'exit') {
+      response.end('OK: exit')
+      exit()
+    } else if (request.url === prefix + 'git/update') {
+      response.end('OK: git/update')
+      gitUpdateSync()
+    } else if (request.url === prefix + 'git/updateAndRestart') {
+      response.end('OK: git/updateAndRestart')
+      gitUpdateSync()
+      restart()
+    } else if (request.url === prefix + 'git/updateAndExit') {
+      response.end('OK: git/updateAndExit')
+      gitUpdateSync()
+      exit()
+    } else {
+      response.end('Error: No such command.')
+    }
+
+  })
+    .listen(port)
 }
 
-const spawnMainProcess = function () {
+/**
+ * Start main process.
+ */
+const start = function () {
 
-  let i = 0;
-  deguOpts.steps.forEach( function(step) {
-    console.log(`Info: Execute steps ${++i}/${deguOpts.steps.length}`, step)
-    result = childProcess
-      .spawnSync(step[0], step.slice(1), {
-        detached: false,
-        stdio: 'inherit',
-        env: process.env,
-        cwd: process.cwd()
-      })
+  let i = 0
+  deguOpts.steps
+    .forEach( function(step) {
+      console.log(`Info: Executing steps ${++i}/${deguOpts.steps.length} ...`, step)
 
-    if (result.status > 0) {
-      process.exit(result.status)
+      if (!Array.isArray(step)) {
+        if (typeof step === "string") {
+          step = step.split(' ')
+        } else {
+          return
+        }
+      }
+
+      result = childProcess
+        .spawnSync(step[0], step.slice(1), {
+          detached: false,
+          stdio: 'inherit',
+          env: process.env,
+          cwd: process.cwd()
+        })
+
+      if (result.status > 0) {
+        process.exit(result.status)
+      }
+    })
+
+  let mainCommand = deguOpts.main
+  if (!Array.isArray(mainCommand)) {
+    if (typeof mainCommand === "string") {
+      mainCommand = mainCommand.split(' ')
+    } else {
+      return
     }
-  })
+  }
 
-  proc = childProcess
-    .spawn(deguOpts.main[0], deguOpts.main.slice(1), {
+  mainProcess = childProcess
+    .spawn(mainCommand[0], mainCommand.slice(1), {
       detached: false,
       stdio: 'inherit',
       env: {
@@ -106,128 +191,149 @@ const spawnMainProcess = function () {
       cwd: process.cwd()
     })
 
-  proc
-    .once('close', function (status) {
-      process.exit(status)
-    })
-
-}
-
-const killMainProcess = function () {
-  console.log('Info: Exiting...')
-  if (!proc) {
-    return
-  }
-  proc.kill()
-}
-
-const restartMainProcess = function () {
-  if (!proc) {
-    return
-  }
-  proc.removeAllListeners('close')
-  proc.once('close', function (code, signal) {
-    console.log('Info: Restarting ...')
-    spawnMainProcess()
+  mainProcess.on('close', (status) => {
+    process.exit(status)
   })
-  proc.kill()
+
 }
 
-const gitUpdate = function (callback) {
-  console.log('Info: Update ...')
-  childProcess
-    .spawn('git', ['pull'], {
+/**
+ * Exit main process.
+ */
+const exit = function () {
+  console.log('Info: Exiting...')
+  if (!mainProcess) {
+    return
+  }
+  mainProcess.kill()
+}
+
+/**
+ * Restart main process.
+ */
+const restart = function () {
+  if (!mainProcess) {
+    return
+  }
+  mainProcess.removeAllListeners('close')
+  mainProcess.once('close', function (code, signal) {
+    console.log('Info: Restarting ...')
+    start()
+  })
+  mainProcess.kill()
+}
+
+/**
+ * Git init
+ * @param url
+ */
+const gitInitSync = function () {
+  console.log('Info: Clone repository from remote ...')
+
+  if (fs.existsSync('/app/.git')) {
+    console.error('ERROR: /app repository directory')
+    return false
+  }
+
+  chmodKeyFileSync()
+
+  result = childProcess.spawnSync('git',
+    ['clone', '--depth', '1', '--recurse-submodules', repositoryUrl, '/app'],
+    {
       detached: false,
       stdio: 'inherit',
       cwd: process.cwd()
     })
-    .on('close', function () {
-      if (callback) {
-        callback()
-      }
+
+  if (result.status) {
+    process.exit(result.status)
+  }
+
+}
+
+/**
+ * Git update.
+ * @param callback
+ * @returns {boolean}
+ */
+const gitUpdateSync = function () {
+
+  if (!fs.existsSync('/app/.git')) {
+    console.log('ERROR: /app is not git repo.')
+    return false
+  }
+
+  console.log('Info: Update repository from remote ...')
+
+  result = childProcess.spawnSync('git', ['config', '--get', 'remote.origin.url'], {
+    cwd: '/app',
+    stdio: 'pipe',
+    encoding: 'utf-8'
+  })
+
+  if (result.stdout) {
+    result = String(result.stdout).trim()
+    if (result !== repositoryUrl) {
+      console.error('ERROR: Remote of /app (' + result + ') is different than local (' + repositoryUrl + ')')
+      process.exit(1)
+      return false
+    }
+  }
+
+  chmodKeyFileSync()
+
+  result = childProcess.spawnSync('git',
+    ['reset', '--hard', 'origin'],
+    {
+      detached: false,
+      stdio: 'inherit',
+      cwd: process.cwd()
     })
-}
 
-const gitInitSync = function (url) {
-  console.log('Info: Initialize codebase ...')
-
-  if (fs.existsSync('/app/.git')) {
-
-    result = childProcess.spawnSync('git', ['config', '--get', 'remote.origin.url'], {
-      cwd: '/app',
-      stdio: 'pipe',
-      encoding: 'utf-8'
-    });
-
-    if (result.stdout) {
-      result = String(result.stdout).trim()
-      if (result !== url) {
-        console.error('ERROR: remote of /app is different than input. (', result, '=/=', url, ')')
-        process.exit(1)
-      }
-    }
-
-    result = childProcess.spawnSync('git',
-      ['reset', '--hard', 'origin'],
-      {
-        detached: false,
-        stdio: 'inherit',
-        cwd: process.cwd()
-      })
-
-    if (result.status > 0) {
-      process.exit(result.status)
-    }
-
-    result = childProcess.spawnSync('git',
-      ['pull'],
-      {
-        detached: false,
-        stdio: 'inherit',
-        cwd: process.cwd()
-      })
-
-    if (result.status > 0) {
-      process.exit(result.status)
-    }
-
-  } else {
-    result = childProcess.spawnSync('git',
-      ['clone', '--depth', '1', '--recurse-submodules', url, '/app'],
-      {
-        detached: false,
-        stdio: 'inherit',
-        cwd: process.cwd()
-      })
-
-    if (result.status > 0) {
-      process.exit(result.status)
-    }
-
+  if (result.status > 0) {
+    process.exit(result.status)
+    return false
   }
-}
 
-if (fs.existsSync('/key')) {
-  try {
-    fs.chmodSync('/key', 0o400)
-  } catch(err) {
-    console.error('Warning: Cannot chmod key file "/key", ensure the passed key file have recommended modes 0400.')
+  result = childProcess.spawnSync('git',
+    ['pull'],
+    {
+      detached: false,
+      stdio: 'inherit',
+      cwd: process.cwd()
+    })
+
+  if (result.status > 0) {
+    process.exit(result.status)
+    return false
   }
-} else {
-  console.error('Info: no key file "/key"')
+
+  return true
 }
 
-if (args[0]) {
-  gitInitSync(args[0])
-}
-
+/**
+ * Main.
+ */
+// Reload file.
 reloadDeguFile()
 
-if (fs.existsSync('/app/package.json')) {
-  spawnMainProcess()
-  if (deguOpts.api.enable) {
-    startManager(8125)
-  }
-} else {
-  console.error('No /app/package.json')
+// Start web managemenet API.
+if (deguOpts.api.enable) {
+  startManagerApi(8125)
 }
+
+// Initialize or update the codebase.
+if (args[0]) {
+  if (fs.existsSync('/app/.git')) {
+    gitUpdateSync()
+  } else {
+    gitInitSync()
+  }
+}
+
+if (fs.existsSync('/app/package.json')) {
+  start()
+} else {
+  console.error('ERROR: /app/package.json does not exists.')
+}
+
