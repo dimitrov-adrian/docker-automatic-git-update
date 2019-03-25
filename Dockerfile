@@ -1,14 +1,11 @@
-from node:10-alpine
-
-MAINTAINER Adrian Dimitrov <dimitrov.adrian@gmail.com>
-LABEL version="1.0" description=""
+FROM node:10-alpine
 
 RUN apk add --no-cache git openssh-client
 
-COPY rootfs /
+COPY docker-entrypoint.js /
 
 WORKDIR /app
 
 EXPOSE 8125
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+ENTRYPOINT ["node", "/docker-entrypoint.js"]
