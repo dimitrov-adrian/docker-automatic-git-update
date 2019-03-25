@@ -9,6 +9,4 @@ COPY docker-entrypoint.js /
 
 WORKDIR /app
 
-EXPOSE 8125
-
 ENTRYPOINT ["node", "/docker-entrypoint.js"]

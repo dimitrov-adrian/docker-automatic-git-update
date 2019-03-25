@@ -32,7 +32,7 @@ docker run --rm -ti --name myapp \
     https://github.com/nodejs/nodejs-hello-world
 ```
 
-App must have `package.json` file to run the main
+App must have `package.json` or `.degu.json` file to run the main
 
 ### GIT ssh private key file
 `/key`
@@ -48,10 +48,10 @@ Endpoints:
 - `git/updateAndExit`
 - `git/updateAndRestart`
 
-API endpoints could be used to notify the container to update and restart, 
+API endpoints could be used to notify the container to update and restart,
 for example setting github webhooks to `git/updateAndRestart`
 
-### .degu.json file
+### /app/.degu.json file
 
 ```json
 {
@@ -60,7 +60,7 @@ for example setting github webhooks to `git/updateAndRestart`
     "VAR2": "VALUE2"
   },
   "main": [ "npm", "start" ],
-  "steps": [ 
+  "steps": [
     [ "npm", "install" ]
    ],
   "api": {
@@ -69,6 +69,11 @@ for example setting github webhooks to `git/updateAndRestart`
     "whiteList": [
       "127.0.0.1"
     ]
+  },
+  "updateScheduler": {
+    "enable": false,
+    "interval": 3600,
+    "onUpdate": "restart"
   }
 }
 
