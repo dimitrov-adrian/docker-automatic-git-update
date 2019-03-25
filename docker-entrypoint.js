@@ -76,23 +76,24 @@ const gitUpdate = function (callback) {
 
 const gitInitSync = function (url) {
   console.log('Initialize...')
-  if (fs.existsSync('/app')) {
-    if (fs.existsSync('/app/.git')) {
-      childProcess.spawnSync('git',
-        ['reset', '--hard', 'HEAD^1'],
-        {
-          detached: false,
-          stdio: 'inherit',
-          cwd: process.cwd()
-        })
-      childProcess.spawnSync('git',
-        ['pull'],
-        {
-          detached: false,
-          stdio: 'inherit',
-          cwd: process.cwd()
-        })
-    }
+  if (!fs.existsSync('/app')) {
+    return
+  }
+  if (fs.existsSync('/app/.git')) {
+    childProcess.spawnSync('git',
+      ['reset', '--hard', 'HEAD^1'],
+      {
+        detached: false,
+        stdio: 'inherit',
+        cwd: process.cwd()
+      })
+    childProcess.spawnSync('git',
+      ['pull'],
+      {
+        detached: false,
+        stdio: 'inherit',
+        cwd: process.cwd()
+      })
   } else {
     childProcess.spawnSync('git',
       ['clone', '--depth', '1', '--recurse-submodules', url, '/app'],
@@ -122,7 +123,7 @@ http.createServer(function (request, response) {
 }).listen(8125)
 
 if (args[0]) {
-  gitInitSync()
+  gitInitSync(args[0])
 }
 
 spawnNodeStartProcess()
