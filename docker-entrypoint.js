@@ -1,3 +1,4 @@
+const http = require('http')
 const fs = require('fs')
 const path = require('path')
 const childProcess = require('child_process')
@@ -33,7 +34,12 @@ const deguOpts = {
 /**
  * Repository URI comes from env variable GIT_URI or as command to container.
  */
-const repositoryUrl = process.env.GIT_URI || process.argv.slice(2).pop()
+const repositoryUrl = process.env.GIT_URI || process.argv[2]
+
+/**
+ * Repository URI comes from env variable GIT_URI or as command to container.
+ */
+const repositoryBranch = process.env.GIT_BRANCH || process.argv[3] || 'master'
 
 /**
  * App directory, defaults to /app, in some cases may need to set other.
@@ -100,7 +106,6 @@ const startManagerApi = function () {
     return
   }
 
-  const http = require('http')
   const prefix = deguOpts.api.prefix || ''
   console.log(`Info: Starting web management API on port ${deguOpts.api.port} with prefix ${prefix} ...`)
 
@@ -278,7 +283,7 @@ const gitInitSync = function () {
 
   chmodKeyFileSync()
   let result = childProcess.spawnSync('git',
-    ['clone', '--depth', '1', '--recurse-submodules', repositoryUrl, appDir],
+    ['clone', '--depth', '1', '--recurse-submodules', '-b', repositoryBranch, '--single-branch', repositoryUrl, appDir],
     {
       detached: false,
       stdio: 'inherit',

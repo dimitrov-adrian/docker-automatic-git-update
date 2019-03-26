@@ -6,7 +6,7 @@
 Run node apps from git repository url
 
 ```
-docker run dimitrovadrian/degu <git repo>
+docker run dimitrovadrian/degu <git repo url> [branch]
 ```
 
 Example:
