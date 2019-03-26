@@ -5,12 +5,30 @@ const childProcess = require('child_process')
 /**
  * Main process holder.
  */
-let mainProcess
+let appProcess
 
 /**
  * Return object of options from degu file
  */
-let deguOpts = {}
+const deguOpts = {
+  env: {},
+  steps: [
+    ['npm', 'install']
+  ],
+  main: ['npm', 'start'],
+  forever: false,
+  api: {
+    port: 8125,
+    enable: true,
+    prefix: '/',
+    whitelist: []
+  },
+  updateScheduler: {
+    enable: false,
+    interval: 3600,
+    onUpdate: 'restart'
+  }
+}
 
 /**
  * Repository URI comes from env variable GIT_URI or as command to container.
@@ -25,47 +43,28 @@ const appDir = process.env.APP_DIR || '/app'
 /**
  * Degu options file.
  */
-const deguFile = path.join(appDir, '.degu.json')
+const deguFile = process.env.DEGU_FILE || path.join(appDir, '.degu.json')
 
 /**
  * Reload degu (/app/.degu.json) and reset deguOpts
  * @returns {boolean}
  */
-const reloadDeguFile = function () {
-  deguOpts = {
-    env: {},
-    steps: [
-      ['npm', 'install']
-    ],
-    main: ['npm', 'start'],
-    api: {
-      port: 8125,
-      enable: true,
-      prefix: '/',
-      whitelist: []
-    },
-    updateScheduler: {
-      enable: false,
-      interval: 3600,
-      onUpdate: 'restart'
-    }
-  }
-
+const loadDeguFileOpts = function () {
   if (fs.existsSync(deguFile)) {
     console.log(`Info: Load ${deguFile}`)
-    let deguFileOpts = { ...deguOpts, ...require(deguFile) }
-    // Because have no recursive merge, and we have small ammount of keys,
-    // no need of external library.
-    if (deguFileOpts.env) {
-      deguOpts.env = { ...deguOpts.env, ...deguFileOpts.env }
-    }
-    if (deguFileOpts.api) {
-      deguOpts.api = { ...deguOpts.api, ...deguFileOpts.api }
-    }
-    if (deguFileOpts.updateScheduler) {
-      deguOpts.updateScheduler = { ...deguOpts.updateScheduler, ...deguFileOpts.updateScheduler }
-    }
-    deguOpts = { ...deguOpts, ...deguFileOpts }
+    let deguFileOpts = require(deguFile)
+    Object.keys(deguFileOpts).map((key, index) => {
+      if (deguOpts.hasOwnProperty(key)) {
+        if (typeof deguOpts[key] === 'object') {
+          deguOpts[key] = {
+            ...deguOpts[key],
+            ...deguFileOpts[key]
+          }
+        } else {
+          deguOpts[key] = deguFileOpts[key]
+        }
+      }
+    })
     return true
   } else {
     console.log(`Info: No ${deguFile}`)
@@ -79,10 +78,10 @@ const reloadDeguFile = function () {
 const chmodKeyFileSync = function () {
   if (fs.existsSync('/key')) {
     try {
-      fs.chmodSync('/key', 0o400)
+      fs.chmodSync('/key', 0o600)
       return true
     } catch (err) {
-      console.error('Warning: Cannot chmod key file "/key", ensure the passed key file have recommended modes 0400.')
+      console.error('Warning: Cannot chmod key file "/key", ensure the passed key file have recommended modes 0600.')
       return false
     }
   } else {
@@ -103,13 +102,9 @@ const startManagerApi = function () {
 
   const http = require('http')
   const prefix = deguOpts.api.prefix || ''
-  console.log(`Info: Starting web management API on port ${deguOpts.api.port} ...`)
+  console.log(`Info: Starting web management API on port ${deguOpts.api.port} with prefix ${prefix} ...`)
 
   http.createServer((request, response) => {
-    if (!deguOpts.api.enable) {
-      return
-    }
-
     const ip = request.connection.remoteAddress ||
       request.socket.remoteAddress ||
       request.connection.socket.remoteAddress
@@ -127,9 +122,7 @@ const startManagerApi = function () {
       return
     }
 
-    if (request.url === prefix + 'reload-degu-file') {
-      reloadDeguFile()
-    } else if (request.url === prefix + 'restart') {
+    if (request.url === prefix + 'restart') {
       response.end('OK: restart')
       restart()
     } else if (request.url === prefix + 'exit') {
@@ -156,6 +149,9 @@ const startManagerApi = function () {
     .listen(deguOpts.api.port)
 }
 
+/**
+ * Start the update scheduler.
+ */
 const startUpdateScheduler = function () {
   if (!deguOpts.updateScheduler.enable) {
     return
@@ -181,7 +177,7 @@ const startUpdateScheduler = function () {
 }
 
 /**
- * Start main process.
+ * Start app process.
  */
 const start = function () {
   let i = 0
@@ -201,12 +197,15 @@ const start = function () {
         .spawnSync(step[0], step.slice(1), {
           detached: false,
           stdio: 'inherit',
-          env: process.env,
-          cwd: process.cwd()
+          env: {
+            ...process.env,
+            ...deguOpts.env
+          },
+          cwd: appDir
         })
-
-      if (result.status > 0) {
-        process.exit(result.status)
+      if (result.status !== 0) {
+        console.log('ERROR: Step failed. Status:', result.status, 'Signal:', result.signal)
+        process.exit(1)
       }
     })
 
@@ -219,7 +218,7 @@ const start = function () {
     }
   }
 
-  mainProcess = childProcess
+  appProcess = childProcess
     .spawn(mainCommand[0], mainCommand.slice(1), {
       detached: false,
       stdio: 'inherit',
@@ -227,38 +226,42 @@ const start = function () {
         ...process.env,
         ...deguOpts.env
       },
-      cwd: process.cwd()
+      cwd: appDir
     })
 
-  mainProcess.on('close', (status) => {
-    process.exit(status)
+  appProcess.on('exit', (status, signal) => {
+    if (status !== 0 && !signal && deguOpts.forever) {
+      setTimeout(start, 1000)
+    } else {
+      process.exit(status)
+    }
   })
 }
 
 /**
- * Exit main process.
+ * Exit app process.
  */
 const exit = function () {
   console.log('Info: Exiting...')
-  if (!mainProcess) {
+  if (!appProcess) {
     return
   }
-  mainProcess.kill()
+  appProcess.kill()
 }
 
 /**
- * Restart main process.
+ * Restart app process.
  */
 const restart = function () {
-  if (!mainProcess) {
+  if (!appProcess) {
     return
   }
-  mainProcess.removeAllListeners('close')
-  mainProcess.once('close', function () {
+  appProcess.removeAllListeners('exit')
+  appProcess.once('exit', function () {
     console.log('Info: Restarting ...')
     start()
   })
-  mainProcess.kill()
+  appProcess.kill()
 }
 
 /**
@@ -282,7 +285,7 @@ const gitInitSync = function () {
       cwd: process.cwd()
     })
 
-  if (result.status) {
+  if (result.status !== 0) {
     process.exit(result.status)
   }
 }
@@ -339,10 +342,10 @@ const gitUpdateSync = function () {
     {
       detached: false,
       stdio: 'inherit',
-      cwd: process.cwd()
+      cwd: appDir
     })
 
-  if (result.status > 0) {
+  if (result.status !== 0) {
     process.exit(result.status)
   }
 
@@ -351,21 +354,18 @@ const gitUpdateSync = function () {
     {
       detached: false,
       stdio: 'inherit',
-      cwd: process.cwd()
+      cwd: appDir
     })
 
-  if (result.status > 0) {
+  if (result.status !== 0) {
     process.exit(result.status)
   }
 
   return true
 }
 
-/**
- * Main.
- */
 // Reload file.
-reloadDeguFile()
+loadDeguFileOpts()
 
 // Initialize or update the codebase.
 if (repositoryUrl) {
@@ -382,7 +382,7 @@ if (repositoryUrl) {
 if (fs.existsSync(path.join(appDir, 'package.json')) || fs.existsSync(deguFile)) {
   start()
 } else {
-  console.error('ERROR: package.json or .degu.json is required.')
+  console.error(`ERROR: ${appDir}/package.json or ${deguFile} is required.`)
   process.exit(1)
 }
 

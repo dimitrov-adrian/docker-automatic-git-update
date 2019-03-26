@@ -32,7 +32,7 @@ docker run --rm -ti --name myapp \
     https://github.com/nodejs/nodejs-hello-world
 ```
 
-App must have `package.json` or `.degu.json` file to run the main
+App must have `package.json` or `.degu.json` file to run the main process.
 
 ### GIT ssh private key file
 `/key`
@@ -41,7 +41,6 @@ App must have `package.json` or `.degu.json` file to run the main
 By default API is enabled and listening on port 8125, it could be changed.
 
 Endpoints:
-- `reload-degu-file`
 - `exit`
 - `restart`
 - `git/update`
@@ -63,6 +62,7 @@ for example setting github webhooks to `git/updateAndRestart`
   "steps": [
     [ "npm", "install" ]
    ],
+  "forever": false,
   "api": {
     "port": 8125,
     "enable": true,

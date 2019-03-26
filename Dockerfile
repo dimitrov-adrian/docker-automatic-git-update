@@ -7,6 +7,4 @@ RUN mkdir -p /root/.ssh &&\
 
 COPY docker-entrypoint.js /
 
-WORKDIR /app
-
 ENTRYPOINT ["node", "/docker-entrypoint.js"]
