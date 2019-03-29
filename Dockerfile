@@ -2,8 +2,7 @@ FROM node:10-alpine
 
 RUN apk add --no-cache git openssh-client python make g++ gcc curl
 
-RUN mkdir -p /root/.ssh &&\
-    echo -e "CanonicalizeHostname yes\nHost *\n\tStrictHostKeyChecking no\n IdentityFile /key" > /root/.ssh/config
+RUN echo -e "CanonicalizeHostname yes\nHost *\n\tStrictHostKeyChecking no\n IdentityFile /ssh_key" > /etc/ssh/ssh_config
 
 COPY docker-entrypoint.js /
 

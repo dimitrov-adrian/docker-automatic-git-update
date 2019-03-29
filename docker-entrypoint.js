@@ -77,19 +77,19 @@ const appDir = process.env.APP_DIR || '/app'
 const deguFile = process.env.DEGU_FILE || path.join(appDir, '.degu.json')
 
 /**
- * Chmodding /key file with proper modes.
+ * Chmodding /ssh_key file with proper modes.
  */
 const chmodKeyFileSync = function () {
-  if (fs.existsSync('/key')) {
+  if (fs.existsSync('/ssh_key')) {
     try {
-      fs.chmodSync('/key', 0o600)
+      fs.chmodSync('/ssh_key', 0o600)
       return true
     } catch (err) {
-      console.error('Warning: Cannot chmod key file "/key", ensure the passed key file have recommended modes 0600.')
+      console.error('Warning: Cannot chmod key file "/ssh_key", ensure the passed key file have recommended modes 0600.')
       return false
     }
   } else {
-    console.error('Info: No private key file "/key"')
+    console.error('Info: No private key file "/ssh_key"')
     return false
   }
 }
@@ -116,7 +116,7 @@ const loadDeguFileOpts = function () {
     })
     return true
   } else {
-    console.log(`Info: No ${deguFile}`)
+    console.log(`Info: No ${deguFile} found, go default.`)
     return false
   }
 }

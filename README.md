@@ -15,7 +15,7 @@ Example:
 docker run --rm -ti --name myapp \
     -p 8080:8080 \
     -p 8125:8125 \
-    -v "$HOME/.ssh/id_rsa_demo:/key" \
+    -v "$HOME/.ssh/id_rsa_demo:/ssh_key" \
     dimitrovadrian/degu \
     https://github.com/fhinkel/nodejs-hello-world
 ```
@@ -26,7 +26,7 @@ Binding directory to /app is possible but for caching purposes.
 docker run --rm -ti --name myapp \
     -p 8080:8080 \
     -p 8125:8125 \
-    -v "$HOME/.ssh/id_rsa_demo:/key" \
+    -v "$HOME/.ssh/id_rsa_demo:/ssh_key" \
     -v "/tmp/app.cache:/app"
     dimitrovadrian/degu \
     https://github.com/fhinkel/nodejs-hello-world
@@ -45,9 +45,9 @@ docker run --rm -ti --name myapp \
 App **must** have `package.json` or `.degu.json` file to run the main process.
 
 ### GIT ssh private key file
-`/key`
+`/ssh_key`
 
-provide as mount like: `-v "$HOME/.ssh/id_rsa_demo:/key"`
+provide as mount like: `-v "$HOME/.ssh/id_rsa_demo:/ssh_key"`
 
 ### API
 
