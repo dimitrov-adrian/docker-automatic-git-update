@@ -32,19 +32,50 @@ docker run --rm -ti --name myapp \
     https://github.com/fhinkel/nodejs-hello-world
 ```
 
-App must have `package.json` or `.degu.json` file to run the main process.
+Or use url to zip file
+
+```
+docker run --rm -ti --name myapp \
+    -p 8080:8080 \
+    -p 8125:8125 \
+    dimitrovadrian/degu \
+    archive https://github.com/fhinkel/nodejs-hello-world/archive/master.zip
+```
+
+App **must** have `package.json` or `.degu.json` file to run the main process.
 
 ### GIT ssh private key file
 `/key`
 
+provide as mount like: `-v "$HOME/.ssh/id_rsa_demo:/key"`
+
 ### API
-API has one simple POST method - exit, when is triggered, the container is exited,
-so it docker could handle and start again.
 
-Endpoints:
-- `exit`
+API has very limited features
 
-### /app/.degu.json file
+#### Endpoints
+* `POST` `/<api.prefix>exit` - exit the app, restarting could be handled by docker restart policy
+* `GET` `/<api.prefix>uptime` - get uptime in seconds
+* `GET` `/<api.prefix>id` - current run ID
+
+
+### Env
+
+* `APP_DIR` the app directory, default is `/app`
+* `DEGU_FILE` .degu.json file (full path), default is `<APP_DIR>/.degu.json`
+
+Remote info, setting these variables will override command line args.
+* `REMOTE_TYPE`
+* `REMOTE_URL`
+* `REMOTE_BRANCH`
+
+API related options, if .degu.json file is provided then it's override env variables.
+* `DEGU_API_ENABLE` default is `true`
+* `DEGU_API_PORT` default is 8125
+* `DEGU_API_PREFIX` default is `/`
+* `DEGU_API_WHITELIST` empty, all is allowed
+
+### /app/.degu.json file example
 
 ```json
 {

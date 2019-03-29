@@ -1,8 +1,19 @@
 const fs = require('fs')
 const http = require('http')
 const path = require('path')
+const crypto = require('crypto')
 const os = require('os')
 const childProcess = require('child_process')
+
+/**
+ * Start time
+ */
+const time = new Date()
+
+/**
+ * Run ID
+ */
+const runId = crypto.randomBytes(20).toString('hex')
 
 /**
  * Main process holder.
@@ -19,10 +30,10 @@ const deguOpts = {
   ],
   main: ['npm', 'start'],
   api: {
-    enable: true,
-    port: 8125,
-    prefix: '/',
-    whitelist: []
+    enable: process.env.DEGU_API_ENABLE || true,
+    port: process.env.DEGU_API_PORT || 8125,
+    prefix: process.env.DEGU_API_PREFIX || '/',
+    whitelist: process.env.DEGU_API_WHITELIST || []
   }
 }
 
@@ -121,7 +132,7 @@ const start = function () {
 
       if (!Array.isArray(step)) {
         if (typeof step === 'string') {
-          step = step.split(' ')
+          step = step.split(/\s+/)
         } else {
           return
         }
@@ -146,7 +157,7 @@ const start = function () {
   let mainCommand = deguOpts.main
   if (!Array.isArray(mainCommand)) {
     if (typeof mainCommand === 'string') {
-      mainCommand = mainCommand.split(' ')
+      mainCommand = mainCommand.split(/\s+/)
     } else {
       return
     }
@@ -171,12 +182,13 @@ const start = function () {
 /**
  * Exit app process.
  */
-const exit = function () {
+const exit = function (code) {
   console.log('Info: Exiting...')
   if (!appProcess) {
     return
   }
   appProcess.kill()
+  process.exit(code || 0)
 }
 
 /**
@@ -281,8 +293,9 @@ const downloadArchivedCodebase = function () {
   let tmpFile = downloadFileSync(remote.url)
   if (!tmpFile) {
     console.error('ERROR: Downloading error', remote.url)
+    process.exit(1)
   }
-  console.log('Info: Downloading done.')
+  console.log('Info: Downloading complete.')
 
   let ext = tmpFile.split('.').pop()
   let tmpDir = path.join(os.tmpdir(), 'appdir.tmp')
@@ -290,9 +303,12 @@ const downloadArchivedCodebase = function () {
 
   if (ext === 'zip') {
     try {
-      fs.renameSync(tmpFile, tmpFile + '.zip')
+      if (!/\.zip$/i.test(tmpFile)) {
+        fs.renameSync(tmpFile, tmpFile + '.zip')
+        tmpFile = tmpFile + '.zip'
+      }
       let result = childProcess.spawnSync('unzip',
-        ['-o', '-d', tmpDir, tmpFile + '.zip'],
+        ['-o', '-d', tmpDir, tmpFile],
         {
           detached: false,
           stdio: 'inherit'
@@ -368,30 +384,39 @@ const startManagerApi = function () {
   const prefix = deguOpts.api.prefix || ''
   console.log(`Info: Starting web management API on port ${deguOpts.api.port} with prefix ${prefix} ...`)
 
+  let whitelist = deguOpts.api.whitelist
+  if (typeof whitelist === 'string') {
+    whitelist = whitelist.split(/[\s;,]+/)
+  }
   http.createServer((request, response) => {
     const ip = request.connection.remoteAddress ||
       request.socket.remoteAddress ||
       request.connection.socket.remoteAddress
 
-    if (deguOpts.api.whitelist && deguOpts.api.whitelist.length > 0) {
-      if (deguOpts.api.whitelist.indexOf(ip) === -1) {
-        response.end('ERROR: IP not allowed')
-        console.error(`Warning: Rejected API request ${request.url} from ${ip}`)
+    if (whitelist && whitelist.length > 0) {
+      if (whitelist.indexOf(ip) === -1) {
+        response.end('ERROR: IP not allowed.')
+        console.error(`Warning: Rejected API request ${request.url} from ${ip}.`)
         return
       }
     }
 
-    if (request.method !== 'POST') {
-      response.end('ERROR: Method not allowed')
-      return
+    if (request.method === 'GET') {
+      if (request.url === prefix + 'uptime') {
+        response.end((((new Date()) - time) / 1000).toFixed(3).toString())
+        return
+      } else if (request.url === prefix + 'id') {
+        response.end(runId)
+        return
+      }
+    } else if (request.method === 'POST') {
+      if (request.url === prefix + 'exit') {
+        response.end('OK: Exiting ...')
+        exit()
+        return
+      }
     }
-
-    if (request.url === prefix + 'exit') {
-      response.end('OK: Exiting')
-      exit()
-    } else {
-      response.end('ERROR: No such command.')
-    }
+    response.end('ERROR: No such command.')
   })
     .listen(deguOpts.api.port)
 }
