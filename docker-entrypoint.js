@@ -1,6 +1,7 @@
-const http = require('http')
 const fs = require('fs')
+const http = require('http')
 const path = require('path')
+const os = require('os')
 const childProcess = require('child_process')
 
 /**
@@ -17,29 +18,42 @@ const deguOpts = {
     ['npm', 'install']
   ],
   main: ['npm', 'start'],
-  forever: false,
   api: {
-    port: 8125,
     enable: true,
+    port: 8125,
     prefix: '/',
     whitelist: []
-  },
-  updateScheduler: {
-    enable: false,
-    interval: 3600,
-    onUpdate: 'restart'
   }
 }
 
 /**
- * Repository URI comes from env variable GIT_URI or as command to container.
+ * Remote object containg information for the repo/archive url, etc.
  */
-const repositoryUrl = process.env.GIT_URI || process.argv[2]
+const remote = {
+  /**
+   * Type
+   */
+  type: process.env.REMOTE_TYPE || process.argv[2],
 
-/**
- * Repository URI comes from env variable GIT_URI or as command to container.
- */
-const repositoryBranch = process.env.GIT_BRANCH || process.argv[3] || 'master'
+  /**
+   * URL
+   */
+  url: process.env.REMOTE_URL || process.argv[3],
+
+  /**
+   * BRANCH
+   */
+  branch: process.env.REMOTE_BRANCH || process.argv[4]
+}
+
+if (!remote.branch && !remote.url && remote.type) {
+  remote.url = remote.type
+  remote.type = 'git'
+}
+
+if (!remote.branch) {
+  remote.branch = 'master'
+}
 
 /**
  * App directory, defaults to /app, in some cases may need to set other.
@@ -50,6 +64,24 @@ const appDir = process.env.APP_DIR || '/app'
  * Degu options file.
  */
 const deguFile = process.env.DEGU_FILE || path.join(appDir, '.degu.json')
+
+/**
+ * Chmodding /key file with proper modes.
+ */
+const chmodKeyFileSync = function () {
+  if (fs.existsSync('/key')) {
+    try {
+      fs.chmodSync('/key', 0o600)
+      return true
+    } catch (err) {
+      console.error('Warning: Cannot chmod key file "/key", ensure the passed key file have recommended modes 0600.')
+      return false
+    }
+  } else {
+    console.error('Info: No private key file "/key"')
+    return false
+  }
+}
 
 /**
  * Reload degu (/app/.degu.json) and reset deguOpts
@@ -76,109 +108,6 @@ const loadDeguFileOpts = function () {
     console.log(`Info: No ${deguFile}`)
     return false
   }
-}
-
-/**
- * Chmodding /key file with proper modes.
- */
-const chmodKeyFileSync = function () {
-  if (fs.existsSync('/key')) {
-    try {
-      fs.chmodSync('/key', 0o600)
-      return true
-    } catch (err) {
-      console.error('Warning: Cannot chmod key file "/key", ensure the passed key file have recommended modes 0600.')
-      return false
-    }
-  } else {
-    console.error('Info: No private key file "/key"')
-    return false
-  }
-}
-
-/**
- * Start web manager API
- *
- * @param port
- */
-const startManagerApi = function () {
-  if (!deguOpts.api.enable || !deguOpts.api.port) {
-    return
-  }
-
-  const prefix = deguOpts.api.prefix || ''
-  console.log(`Info: Starting web management API on port ${deguOpts.api.port} with prefix ${prefix} ...`)
-
-  http.createServer((request, response) => {
-    const ip = request.connection.remoteAddress ||
-      request.socket.remoteAddress ||
-      request.connection.socket.remoteAddress
-
-    if (deguOpts.api.whitelist && deguOpts.api.whitelist.length > 0) {
-      if (deguOpts.api.whitelist.indexOf(ip) === -1) {
-        response.end('Error: IP not allowed')
-        console.error(`Warning: Rejected API request ${request.url} from ${ip}`)
-        return
-      }
-    }
-
-    if (request.method !== 'POST') {
-      response.end('Error: Method not allowed')
-      return
-    }
-
-    if (request.url === prefix + 'restart') {
-      response.end('OK: restart')
-      restart()
-    } else if (request.url === prefix + 'exit') {
-      response.end('OK: exit')
-      exit()
-    } else if (request.url === prefix + 'git/update') {
-      response.end('OK: git/update')
-      gitUpdateSync()
-    } else if (request.url === prefix + 'git/updateAndRestart') {
-      response.end('OK: git/updateAndRestart')
-      let currentHash = getGitHashSync()
-      gitUpdateSync()
-      if (currentHash !== getGitHashSync()) {
-        restart()
-      }
-    } else if (request.url === prefix + 'git/updateAndExit') {
-      response.end('OK: git/updateAndExit')
-      gitUpdateSync()
-      exit()
-    } else {
-      response.end('Error: No such command.')
-    }
-  })
-    .listen(deguOpts.api.port)
-}
-
-/**
- * Start the update scheduler.
- */
-const startUpdateScheduler = function () {
-  if (!deguOpts.updateScheduler.enable) {
-    return
-  }
-
-  if (deguOpts.updateScheduler.interval < 60) {
-    console.error('ERROR: Disable updateScheduler. Interval must be more than 60.')
-  }
-  console.log('Info: Setting up auto update scheduler to ', deguOpts.updateScheduler.interval + 's')
-
-  setInterval(() => {
-    console.log('Info: Triggering update scheduler check ...')
-    let currentHash = getGitHashSync()
-    gitUpdateSync()
-    if (currentHash !== getGitHashSync()) {
-      if (deguOpts.updateScheduler.onUpdate === 'restart') {
-        restart()
-      } else if (deguOpts.updateScheduler.onUpdate === 'exit') {
-        exit()
-      }
-    }
-  }, deguOpts.updateScheduler.interval * 1000)
 }
 
 /**
@@ -235,11 +164,7 @@ const start = function () {
     })
 
   appProcess.on('exit', (status, signal) => {
-    if (status !== 0 && !signal && deguOpts.forever) {
-      setTimeout(start, 1000)
-    } else {
-      process.exit(status)
-    }
+    process.exit(status)
   })
 }
 
@@ -255,35 +180,14 @@ const exit = function () {
 }
 
 /**
- * Restart app process.
- */
-const restart = function () {
-  if (!appProcess) {
-    return
-  }
-  appProcess.removeAllListeners('exit')
-  appProcess.once('exit', function () {
-    console.log('Info: Restarting ...')
-    start()
-  })
-  appProcess.kill()
-}
-
-/**
  * Git init
  * @param url
  */
 const gitInitSync = function () {
   console.log('Info: Clone repository from remote ...')
-
-  if (fs.existsSync(path.join(appDir, '.git'))) {
-    console.error(`ERROR: ${appDir} repository directory`)
-    return false
-  }
-
   chmodKeyFileSync()
   let result = childProcess.spawnSync('git',
-    ['clone', '--depth', '1', '--recurse-submodules', '-b', repositoryBranch, '--single-branch', repositoryUrl, appDir],
+    ['clone', '--depth', '1', '--recurse-submodules', '-b', remote.branch, '--single-branch', remote.url, appDir],
     {
       detached: false,
       stdio: 'inherit',
@@ -296,34 +200,11 @@ const gitInitSync = function () {
 }
 
 /**
- * Get current hash.
- * @returns {String}
- */
-const getGitHashSync = function () {
-  let result = childProcess.spawnSync('git', ['rev-parse', '--verify', 'HEAD'], {
-    cwd: appDir,
-    stdio: 'pipe',
-    encoding: 'utf-8'
-  })
-
-  if (result.stdout) {
-    return String(result.stdout).trim()
-  } else {
-    return ''
-  }
-}
-
-/**
  * Git update.
  * @param callback
  * @returns {boolean}
  */
 const gitUpdateSync = function () {
-  if (!fs.existsSync(path.join(appDir, '.git'))) {
-    console.log(`ERROR: ${appDir} is not git repo.`)
-    return false
-  }
-
   console.log('Info: Update repository from remote ...')
   let result
   result = childProcess.spawnSync('git', ['config', '--get', 'remote.origin.url'], {
@@ -334,8 +215,8 @@ const gitUpdateSync = function () {
 
   if (result.stdout) {
     result = String(result.stdout).trim()
-    if (result !== repositoryUrl) {
-      console.error(`ERROR: Remote of ${appDir} (${result}) is different than local (${repositoryUrl})`)
+    if (result !== remote.url) {
+      console.error(`ERROR: Remote of ${appDir} (${result}) is different than local (${remote.url})`)
       process.exit(1)
     }
   }
@@ -369,24 +250,160 @@ const gitUpdateSync = function () {
   return true
 }
 
+/**
+ * Sync download file
+ * @param {*} uri
+ */
+const downloadFileSync = function (uri) {
+  const basename = path.basename(uri)
+  const tmpFilePath = path.join(os.tmpdir(), basename)
+  let result = childProcess.spawnSync('curl',
+    ['-#', '-L', '-o', tmpFilePath, uri],
+    {
+      detached: false,
+      stdio: 'inherit'
+    })
+  return result.status === 0 ? tmpFilePath : false
+}
+
+/**
+ * Download archived codebase, and extract to app directory.
+ * @param uri
+ * @returns {Promise<any>}
+ */
+const downloadArchivedCodebase = function () {
+  if (fs.existsSync(appDir)) {
+    console.error('ERROR: App directory already exists.')
+    process.exit(1)
+  }
+
+  console.log('Info: Downloading code from', remote.url)
+  let tmpFile = downloadFileSync(remote.url)
+  if (!tmpFile) {
+    console.error('ERROR: Downloading error', remote.url)
+  }
+  console.log('Info: Downloading done.')
+
+  let ext = tmpFile.split('.').pop()
+  let tmpDir = path.join(os.tmpdir(), 'appdir.tmp')
+  fs.mkdirSync(tmpDir)
+
+  if (ext === 'zip') {
+    try {
+      fs.renameSync(tmpFile, tmpFile + '.zip')
+      let result = childProcess.spawnSync('unzip',
+        ['-o', '-d', tmpDir, tmpFile + '.zip'],
+        {
+          detached: false,
+          stdio: 'inherit'
+        })
+      if (result.status !== 0) {
+        process.exit(result.status)
+      }
+    } catch (err) {
+      console.error('ERROR:', err.toString())
+      process.exit(1)
+    }
+  } else if (/^tar|t.z/i.test(ext)) {
+    let result = childProcess.spawnSync('tar',
+      ['-xvf', tmpFile, '-C', tmpDir],
+      {
+        detached: false,
+        stdio: 'inherit'
+      })
+    if (result.status !== 0) {
+      process.exit(result.status)
+    }
+  } else {
+    console.error('ERROR: Unsupporteed archive type', ext, 'from', remote.url)
+    process.exit(1)
+  }
+
+  let files = fs.readdirSync(tmpDir)
+  if (files.length === 1) {
+    if (fs.lstatSync(path.join(tmpDir, files[0])).isDirectory()) {
+      fs.renameSync(path.join(tmpDir, files[0]), appDir)
+    } else {
+      fs.renameSync(tmpDir, files[0])
+    }
+  } else {
+    fs.renameSync(tmpDir, files[0])
+  }
+}
+
+/**
+ *
+ * @returns {*}
+ */
+const updateCodebase = function () {
+  if (remote.type === 'git') {
+    if (fs.existsSync(path.join(appDir, '.git'))) {
+      gitUpdateSync()
+    } else {
+      gitInitSync()
+    }
+  } else if (remote.type === 'archive') {
+    downloadArchivedCodebase()
+  } else {
+    fs.readdir(appDir, (err, files) => {
+      if (!err && files.length > 0) {
+        console.log('Warning: No supported remote is set, starting from directory', remote)
+      } else {
+        console.error('ERROR: No supported remote is set.', remote)
+      }
+    })
+  }
+}
+
+/**
+ * Start web manager API
+ *
+ * @param port
+ */
+const startManagerApi = function () {
+  if (!deguOpts.api.enable || !deguOpts.api.port) {
+    return
+  }
+
+  const prefix = deguOpts.api.prefix || ''
+  console.log(`Info: Starting web management API on port ${deguOpts.api.port} with prefix ${prefix} ...`)
+
+  http.createServer((request, response) => {
+    const ip = request.connection.remoteAddress ||
+      request.socket.remoteAddress ||
+      request.connection.socket.remoteAddress
+
+    if (deguOpts.api.whitelist && deguOpts.api.whitelist.length > 0) {
+      if (deguOpts.api.whitelist.indexOf(ip) === -1) {
+        response.end('ERROR: IP not allowed')
+        console.error(`Warning: Rejected API request ${request.url} from ${ip}`)
+        return
+      }
+    }
+
+    if (request.method !== 'POST') {
+      response.end('ERROR: Method not allowed')
+      return
+    }
+
+    if (request.url === prefix + 'exit') {
+      response.end('OK: Exiting')
+      exit()
+    } else {
+      response.end('ERROR: No such command.')
+    }
+  })
+    .listen(deguOpts.api.port)
+}
+
 // Reload file.
 loadDeguFileOpts()
 
-// Initialize or update the codebase.
-if (repositoryUrl) {
-  if (fs.existsSync(path.join(appDir, '.git'))) {
-    gitUpdateSync()
-  } else {
-    gitInitSync()
-  }
-} else {
-  console.error('ERROR: No repository URL is provided.')
-  process.exit(1)
-}
+// Update codebase.
+updateCodebase()
 
-if (fs.existsSync(path.join(appDir, 'package.json')) || fs.existsSync(deguFile)) {
-  start()
-} else {
+// Check for package.json or .degu.json
+if (!(fs.existsSync(path.join(appDir, 'package.json')) || fs.existsSync(deguFile))) {
   console.error(`ERROR: ${appDir}/package.json or ${deguFile} is required.`)
   process.exit(1)
 }
@@ -394,5 +411,5 @@ if (fs.existsSync(path.join(appDir, 'package.json')) || fs.existsSync(deguFile))
 // Start web managemenet API.
 startManagerApi()
 
-// Start scheduled updates.
-startUpdateScheduler()
+// Start main process.
+start()

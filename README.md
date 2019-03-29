@@ -6,7 +6,7 @@
 Run node apps from git repository url
 
 ```
-docker run dimitrovadrian/degu <git repo url> [branch]
+docker run dimitrovadrian/degu [git|archive] <URL> [branch]
 ```
 
 Example:
@@ -17,7 +17,7 @@ docker run --rm -ti --name myapp \
     -p 8125:8125 \
     -v "$HOME/.ssh/id_rsa_demo:/key" \
     dimitrovadrian/degu \
-    https://github.com/nodejs/nodejs-hello-world
+    https://github.com/fhinkel/nodejs-hello-world
 ```
 
 Binding directory to /app is possible but for caching purposes.
@@ -29,7 +29,7 @@ docker run --rm -ti --name myapp \
     -v "$HOME/.ssh/id_rsa_demo:/key" \
     -v "/tmp/app.cache:/app"
     dimitrovadrian/degu \
-    https://github.com/nodejs/nodejs-hello-world
+    https://github.com/fhinkel/nodejs-hello-world
 ```
 
 App must have `package.json` or `.degu.json` file to run the main process.
@@ -38,17 +38,11 @@ App must have `package.json` or `.degu.json` file to run the main process.
 `/key`
 
 ### API
-By default API is enabled and listening on port 8125, it could be changed.
+API has one simple POST method - exit, when is triggered, the container is exited,
+so it docker could handle and start again.
 
 Endpoints:
 - `exit`
-- `restart`
-- `git/update`
-- `git/updateAndExit`
-- `git/updateAndRestart`
-
-API endpoints could be used to notify the container to update and restart,
-for example setting github webhooks to `git/updateAndRestart`
 
 ### /app/.degu.json file
 
@@ -62,7 +56,6 @@ for example setting github webhooks to `git/updateAndRestart`
   "steps": [
     [ "npm", "install" ]
    ],
-  "forever": false,
   "api": {
     "port": 8125,
     "enable": true,
@@ -70,11 +63,6 @@ for example setting github webhooks to `git/updateAndRestart`
     "whiteList": [
       "127.0.0.1"
     ]
-  },
-  "updateScheduler": {
-    "enable": false,
-    "interval": 3600,
-    "onUpdate": "restart"
   }
 }
 
