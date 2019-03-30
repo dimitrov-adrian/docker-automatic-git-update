@@ -55,17 +55,17 @@ const remote = {
   /**
    * Type
    */
-  type: (process.env.REMOTE_TYPE || process.argv[2]).toLowerCase(),
+  type: (process.env.REMOTE_TYPE || process.argv[2] || '').toLowerCase(),
 
   /**
    * URL
    */
-  url: process.env.REMOTE_URL || process.argv[3],
+  url: process.env.REMOTE_URL || process.argv[3] || '',
 
   /**
    * BRANCH
    */
-  branch: process.env.REMOTE_BRANCH || process.argv[4]
+  branch: process.env.REMOTE_BRANCH || process.argv[4] || ''
 }
 
 if (!remote.branch && !remote.url && remote.type) {
@@ -123,7 +123,7 @@ const loadDeguFileOpts = function () {
     })
     return true
   } else {
-    console.log(`Info: ${deguFile} not found, go defaults.`)
+    console.log(`Info: ${deguFile} not found, going defaults ...`)
     return false
   }
 }
@@ -135,7 +135,7 @@ const start = function () {
   let i = 0
   Object.values(deguOpts.steps || [])
     .forEach(function (step) {
-      console.log(`Info: Executing steps ${++i}/${deguOpts.steps.length} ...`, step)
+      console.log(`Info: Executing step ${++i}/${deguOpts.steps.length}`, step, '...')
 
       if (!Array.isArray(step)) {
         if (typeof step === 'string') {
@@ -156,7 +156,7 @@ const start = function () {
           cwd: appDir
         })
       if (result.status !== 0) {
-        console.log('ERROR: Step failed. Status:', result.status, 'Signal:', result.signal)
+        console.log('ERROR: Step failed. Status=', result.status, 'Signal=', result.signal)
         process.exit(1)
       }
     })
@@ -170,6 +170,7 @@ const start = function () {
     }
   }
 
+  console.log('Info: Executing main process', mainCommand, '...')
   appProcess = childProcess
     .spawn(mainCommand[0], mainCommand.slice(1), {
       detached: false,
@@ -380,7 +381,9 @@ const downloadArchivedCodebase = function () {
  * @returns {*}
  */
 const updateCodebase = function () {
-  console.log(`Info: Downloading codebase from remote ${remote.type} ${remote.url} ...`)
+  if (remote.url) {
+    console.log(`Info: Downloading codebase from remote ${remote.type} ${remote.url} ...`)
+  }
   if (remote.type === 'git') {
     if (fs.existsSync(path.join(appDir, '.git'))) {
       gitUpdateSync()
@@ -392,13 +395,13 @@ const updateCodebase = function () {
   } else if (remote.type === 'svn') {
     svnCheckout()
   } else {
-    fs.readdir(appDir, (err, files) => {
-      if (!err && files.length > 0) {
-        console.log('Warning: No supported remote is set, starting from directory', remote)
-      } else {
-        console.error('ERROR: No supported remote is set.', remote)
-      }
-    })
+    let files = fs.readdirSync(appDir)
+    if (files.length > 0) {
+      console.log('Warning: No supported remote is set, starting from directory', remote)
+    } else {
+      console.error('ERROR: No supported remote is set.', remote)
+      process.exit(1)
+    }
   }
 }
 
@@ -413,7 +416,7 @@ const startManagerApi = function () {
   }
 
   const prefix = '/' + (deguOpts.api.prefix || '/').replace(/^\//, '')
-  console.log(`Info: Starting web management API on port ${deguOpts.api.port} with prefix ${prefix} ...`)
+  console.log(`Info: Starting web management API port=${deguOpts.api.port} prefix=${prefix} ...`)
 
   let whitelist = deguOpts.api.whitelist
   if (typeof whitelist === 'string') {
@@ -427,7 +430,7 @@ const startManagerApi = function () {
     if (whitelist && whitelist.length > 0) {
       if (whitelist.indexOf(ip) === -1) {
         response.end('ERROR: IP not allowed.')
-        console.error(`Warning: Rejected API request ${request.url} from ${ip}.`)
+        console.error(`Warning: Rejected API request url=${request.url} ip=${ip}.`)
         return
       }
     }
@@ -445,6 +448,7 @@ const startManagerApi = function () {
       }, null, 2))
     } else if (request.method === 'POST' && reqUrl.pathname === prefix + 'exit') {
       response.end('OK: Exiting ...')
+      console.log(`Info: Receiving exit signal delay=${reqUrl.query.delay || 0} code=${reqUrl.query.code || 0}`)
       if (reqUrl.query.delay) {
         setTimeout(() => {
           exit(reqUrl.query.code)
@@ -453,6 +457,7 @@ const startManagerApi = function () {
         exit(reqUrl.query.code)
       }
     } else {
+      console.error(`Warning: Received invalid commant ${request.method} ${request.url}`)
       response.end('ERROR: No such command.')
     }
   })

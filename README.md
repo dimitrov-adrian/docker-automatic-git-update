@@ -1,19 +1,25 @@
 # Degu
 
----
-> ***Notice*** *This container is not intended for production use, it's just provide an easy way to deploy apps for testing purposes.*
----
+![](https://img.shields.io/docker/build/dimitrovadrian/degu.svg)
+![](https://img.shields.io/microbadger/layers/layers/dimitrovadrian/degu/latest.svg)
+![](https://img.shields.io/microbadger/image-size/image-size/dimitrovadrian/degu/latest.svg)
+![](https://img.shields.io/docker/stars/dimitrovadrian/degu.svg)
 
-## Docker images
+Run node apps directly from source URL (GIT, SVN or archive URL).
 
-Tags:
+
+> ***Notice*** *This container is not intended for production use, it just provide an easy way to deploy apps for testing purposes.*
+
+
+## Image tags
 * `latest`
 * `node-11`
 * `node-10` (latest)
 * `node-8`
 
 
-Run node apps directly from source URL (GIT, SVN or archive URL).
+## Usage
+
 
 ```
 docker run dimitrovadrian/degu [git|svn|archive] <URL> [branch]
@@ -37,12 +43,12 @@ docker run --rm -ti --name myapp \
     -p 8080:8080 \
     -p 8125:8125 \
     -v "$HOME/.ssh/id_rsa_demo:/ssh_key" \
-    -v "/tmp/app.cache:/app"
+    -v "/tmp/app.cache:/app" \
     dimitrovadrian/degu \
     https://github.com/fhinkel/nodejs-hello-world
 ```
 
-Or use url to zip file
+Or use URL to zip file (or tar files)
 
 ```
 docker run --rm -ti --name myapp \
@@ -118,5 +124,6 @@ API related options, if .degu.json file is provided then it's override env varia
 
 ```
 
-## License
-The degu project is free for use in any meaning.
+## License & Terms
+**Degu** project is available under the terms of the GPL-v2 or later license.
+
