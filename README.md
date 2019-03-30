@@ -3,7 +3,7 @@
 > ***This container is not intended for production use, it's just provide an easy way to deploy apps for testing purposes.***
 
 
-Run node apps from git repository url
+Run node apps directly from source URL (git or archive).
 
 ```
 docker run dimitrovadrian/degu [git|archive] <URL> [branch]
@@ -74,7 +74,7 @@ API related options, if .degu.json file is provided then it's override env varia
 * `DEGU_API_ENABLE` default is `true`
 * `DEGU_API_PORT` default is 8125
 * `DEGU_API_PREFIX` default is `/`
-* `DEGU_API_WHITELIST` empty, all is allowed
+* `DEGU_API_WHITELIST` IP whitelist (coma separated), by default all is allowed
 
 ### /app/.degu.json file example
 

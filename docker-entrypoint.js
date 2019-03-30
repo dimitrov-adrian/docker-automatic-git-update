@@ -130,7 +130,7 @@ const loadDeguFileOpts = function () {
  */
 const start = function () {
   let i = 0
-  deguOpts.steps
+  Object.values(deguOpts.steps || [])
     .forEach(function (step) {
       console.log(`Info: Executing steps ${++i}/${deguOpts.steps.length} ...`, step)
 
@@ -428,11 +428,11 @@ const startManagerApi = function () {
     .listen(deguOpts.api.port)
 }
 
-// Reload file.
-loadDeguFileOpts()
-
 // Update codebase.
 updateCodebase()
+
+// Reload file.
+loadDeguFileOpts()
 
 // Check for package.json or .degu.json
 if (!(fs.existsSync(path.join(appDir, 'package.json')) || fs.existsSync(deguFile))) {
