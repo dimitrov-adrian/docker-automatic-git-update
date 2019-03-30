@@ -6,6 +6,11 @@ const http = require('http')
 const path = require('path')
 
 /**
+ * Main process holder.
+ */
+let appProcess
+
+/**
  * Start time
  */
 const time = new Date()
@@ -16,9 +21,14 @@ const time = new Date()
 const runId = crypto.randomBytes(20).toString('hex')
 
 /**
- * Main process holder.
+ * App directory, defaults to /app, in some cases may need to set other.
  */
-let appProcess
+const appDir = process.env.APP_DIR || '/app'
+
+/**
+ * Degu options file.
+ */
+const deguFile = process.env.DEGU_FILE || path.join(appDir, '.degu.json')
 
 /**
  * Return object of options from degu file
@@ -60,21 +70,15 @@ const remote = {
 if (!remote.branch && !remote.url && remote.type) {
   remote.url = remote.type
   remote.type = 'git'
+} else if (remote.type && remote.type.split('.').length > 1 && remote.url) {
+  remote.branch = remote.url
+  remote.url = remote.type
+  remote.type = 'git'
 }
 
 if (!remote.branch) {
   remote.branch = 'master'
 }
-
-/**
- * App directory, defaults to /app, in some cases may need to set other.
- */
-const appDir = process.env.APP_DIR || '/app'
-
-/**
- * Degu options file.
- */
-const deguFile = process.env.DEGU_FILE || path.join(appDir, '.degu.json')
 
 /**
  * Chmodding /ssh_key file with proper modes.
@@ -116,7 +120,7 @@ const loadDeguFileOpts = function () {
     })
     return true
   } else {
-    console.log(`Info: No ${deguFile} found, go default.`)
+    console.log(`Info: ${deguFile} not found, go defaults.`)
     return false
   }
 }
@@ -183,7 +187,7 @@ const start = function () {
  * Exit app process.
  */
 const exit = function (code) {
-  console.log('Info: Exiting...')
+  console.log('Info: Exiting ...')
   if (!appProcess) {
     return
   }
@@ -199,7 +203,7 @@ const gitInitSync = function () {
   console.log('Info: Clone repository from remote ...')
   chmodKeyFileSync()
   let result = childProcess.spawnSync('git',
-    ['clone', '--depth', '1', '--recurse-submodules', '-b', remote.branch, '--single-branch', remote.url, appDir],
+    ['clone', '--depth', '1', '--recurse-submodules', '-j8', '-b', remote.branch, '--single-branch', remote.url, appDir],
     {
       detached: false,
       stdio: 'inherit',

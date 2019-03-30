@@ -57,6 +57,7 @@ API has very limited features
 * `POST` `/<api.prefix>exit` - exit the app, restarting could be handled by docker restart policy
 * `GET` `/<api.prefix>uptime` - get uptime in seconds
 * `GET` `/<api.prefix>id` - current run ID
+* `GET` `/<api.prefix>env` - show process.env
 
 
 ### Env
