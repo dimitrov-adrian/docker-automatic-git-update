@@ -1,9 +1,9 @@
+const os = require('os')
 const fs = require('fs')
+const childProcess = require('child_process')
+const crypto = require('crypto')
 const http = require('http')
 const path = require('path')
-const crypto = require('crypto')
-const os = require('os')
-const childProcess = require('child_process')
 
 /**
  * Start time
@@ -269,8 +269,8 @@ const gitUpdateSync = function () {
 const downloadFileSync = function (uri) {
   const basename = path.basename(uri)
   const tmpFilePath = path.join(os.tmpdir(), basename)
-  let result = childProcess.spawnSync('curl',
-    ['-#', '-L', '-o', tmpFilePath, uri],
+  let result = childProcess.spawnSync('wget',
+    ['-c', '-O', tmpFilePath, uri],
     {
       detached: false,
       stdio: 'inherit'
@@ -381,7 +381,7 @@ const startManagerApi = function () {
     return
   }
 
-  const prefix = deguOpts.api.prefix || ''
+  const prefix = '/' + (deguOpts.api.prefix || '').trim().replace(/(^\/+|\/+$)/g, '').trim()
   console.log(`Info: Starting web management API on port ${deguOpts.api.port} with prefix ${prefix} ...`)
 
   let whitelist = deguOpts.api.whitelist
@@ -407,6 +407,9 @@ const startManagerApi = function () {
         return
       } else if (request.url === prefix + 'id') {
         response.end(runId)
+        return
+      } else if (request.url === prefix + 'env') {
+        response.end(JSON.stringify(process.env))
         return
       }
     } else if (request.method === 'POST') {
