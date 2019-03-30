@@ -1,9 +1,10 @@
+const childProcess = require('child_process')
 const os = require('os')
 const fs = require('fs')
-const childProcess = require('child_process')
-const crypto = require('crypto')
-const http = require('http')
 const path = require('path')
+const http = require('http')
+const url = require('url')
+const crypto = require('crypto')
 
 /**
  * Main process holder.
@@ -54,7 +55,7 @@ const remote = {
   /**
    * Type
    */
-  type: process.env.REMOTE_TYPE || process.argv[2],
+  type: (process.env.REMOTE_TYPE || process.argv[2]).toLowerCase(),
 
   /**
    * URL
@@ -77,7 +78,9 @@ if (!remote.branch && !remote.url && remote.type) {
 }
 
 if (!remote.branch) {
-  remote.branch = 'master'
+  if (remote.type === 'git') {
+    remote.branch = 'master'
+  }
 }
 
 /**
@@ -200,7 +203,6 @@ const exit = function (code) {
  * @param url
  */
 const gitInitSync = function () {
-  console.log('Info: Clone repository from remote ...')
   chmodKeyFileSync()
   let result = childProcess.spawnSync('git',
     ['clone', '--depth', '1', '--recurse-submodules', '-j8', '-b', remote.branch, '--single-branch', remote.url, appDir],
@@ -221,7 +223,6 @@ const gitInitSync = function () {
  * @returns {boolean}
  */
 const gitUpdateSync = function () {
-  console.log('Info: Update repository from remote ...')
   let result
   result = childProcess.spawnSync('git', ['config', '--get', 'remote.origin.url'], {
     cwd: appDir,
@@ -267,6 +268,30 @@ const gitUpdateSync = function () {
 }
 
 /**
+ * Downlaod from SVN
+ */
+const svnCheckout = function () {
+  chmodKeyFileSync()
+
+  let repositoryUrl = remote.url
+  if (remote.branch) {
+    repositoryUrl += '/' + remote.branch
+  }
+
+  let result = childProcess.spawnSync('svn',
+    ['export', '--force', repositoryUrl, appDir],
+    {
+      detached: false,
+      stdio: 'inherit',
+      cwd: process.cwd()
+    })
+
+  if (result.status !== 0) {
+    process.exit(result.status)
+  }
+}
+
+/**
  * Sync download file
  * @param {*} uri
  */
@@ -293,7 +318,6 @@ const downloadArchivedCodebase = function () {
     process.exit(1)
   }
 
-  console.log('Info: Downloading code from', remote.url)
   let tmpFile = downloadFileSync(remote.url)
   if (!tmpFile) {
     console.error('ERROR: Downloading error', remote.url)
@@ -356,6 +380,7 @@ const downloadArchivedCodebase = function () {
  * @returns {*}
  */
 const updateCodebase = function () {
+  console.log(`Info: Downloading codebase from remote ${remote.type} ${remote.url} ...`)
   if (remote.type === 'git') {
     if (fs.existsSync(path.join(appDir, '.git'))) {
       gitUpdateSync()
@@ -364,6 +389,8 @@ const updateCodebase = function () {
     }
   } else if (remote.type === 'archive') {
     downloadArchivedCodebase()
+  } else if (remote.type === 'svn') {
+    svnCheckout()
   } else {
     fs.readdir(appDir, (err, files) => {
       if (!err && files.length > 0) {
@@ -385,7 +412,7 @@ const startManagerApi = function () {
     return
   }
 
-  const prefix = '/' + (deguOpts.api.prefix || '').trim().replace(/(^\/+|\/+$)/g, '').trim()
+  const prefix = '/' + (deguOpts.api.prefix || '/').replace(/^\//, '')
   console.log(`Info: Starting web management API on port ${deguOpts.api.port} with prefix ${prefix} ...`)
 
   let whitelist = deguOpts.api.whitelist
@@ -405,28 +432,34 @@ const startManagerApi = function () {
       }
     }
 
-    if (request.method === 'GET') {
-      if (request.url === prefix + 'uptime') {
-        response.end((((new Date()) - time) / 1000).toFixed(3).toString())
-        return
-      } else if (request.url === prefix + 'id') {
-        response.end(runId)
-        return
-      } else if (request.url === prefix + 'env') {
-        response.end(JSON.stringify(process.env))
-        return
+    let reqUrl = url.parse(request.url, true)
+
+    if (request.method === 'GET' && reqUrl.pathname === prefix) {
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({
+        runId: runId,
+        uptime: (((new Date()) - time) / 1000).toFixed(3).toString(),
+        env: process.env,
+        deguOpts: deguOpts,
+        remote: remote
+      }, null, 2))
+    } else if (request.method === 'POST' && reqUrl.pathname === prefix + 'exit') {
+      response.end('OK: Exiting ...')
+      if (reqUrl.query.delay) {
+        setTimeout(() => {
+          exit(reqUrl.query.code)
+        }, reqUrl.query.delay * 1000)
+      } else {
+        exit(reqUrl.query.code)
       }
-    } else if (request.method === 'POST') {
-      if (request.url === prefix + 'exit') {
-        response.end('OK: Exiting ...')
-        exit()
-        return
-      }
+    } else {
+      response.end('ERROR: No such command.')
     }
-    response.end('ERROR: No such command.')
   })
     .listen(deguOpts.api.port)
 }
+
+console.log(`Info: App is starting up #${runId} ...`)
 
 // Update codebase.
 updateCodebase()

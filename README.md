@@ -1,12 +1,22 @@
 # Degu
 
-> ***This container is not intended for production use, it's just provide an easy way to deploy apps for testing purposes.***
+---
+> ***Notice*** *This container is not intended for production use, it's just provide an easy way to deploy apps for testing purposes.*
+---
+
+## Docker images
+
+Tags:
+* `latest`
+* `node-11`
+* `node-10` (latest)
+* `node-8`
 
 
-Run node apps directly from source URL (git or archive).
+Run node apps directly from source URL (GIT, SVN or archive URL).
 
 ```
-docker run dimitrovadrian/degu [git|archive] <URL> [branch]
+docker run dimitrovadrian/degu [git|svn|archive] <URL> [branch]
 ```
 
 Example:
@@ -54,11 +64,19 @@ provide as mount like: `-v "$HOME/.ssh/id_rsa_demo:/ssh_key"`
 API has very limited features
 
 #### Endpoints
-* `POST` `/<api.prefix>exit` - exit the app, restarting could be handled by docker restart policy
-* `GET` `/<api.prefix>uptime` - get uptime in seconds
-* `GET` `/<api.prefix>id` - current run ID
-* `GET` `/<api.prefix>env` - show process.env
+* `POST` `/<api.prefix>exit` - exit the app, restarting could be handled by docker restart policy supported query options `delay` in seconds and `code` int
+* `GET` `/<api.prefix>` - get info about current instance
 
+Info example:
+
+```
+curl localhost:8125
+```
+
+Exit example:
+```
+curl -XPOST localhost:8125/exit?delay=10
+```
 
 ### Env
 
@@ -99,3 +117,6 @@ API related options, if .degu.json file is provided then it's override env varia
 }
 
 ```
+
+## License
+The degu project is free for use in any meaning.
