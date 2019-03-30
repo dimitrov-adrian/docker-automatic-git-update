@@ -5,7 +5,7 @@
 ![](https://img.shields.io/microbadger/image-size/image-size/dimitrovadrian/degu/latest.svg)
 ![](https://img.shields.io/docker/stars/dimitrovadrian/degu.svg)
 
-Run node apps directly from source URL (GIT, SVN or archive URL).
+Run node apps directly from source remote URL.
 
 
 > ***Notice*** *This container is not intended for production use, it just provide an easy way to deploy apps for testing purposes.*
@@ -16,6 +16,15 @@ Run node apps directly from source URL (GIT, SVN or archive URL).
 * `node-11`
 * `node-10` (latest)
 * `node-8`
+
+
+### Supported remote sources
+* GIT
+* SVN
+* Archives: zip, tar, tar.gz, tar.bz2, tar.xz
+
+It also supported to run the container without remote but mounted directory, anyway,
+this is not the idea of the container.
 
 
 ## Usage
@@ -84,15 +93,15 @@ Exit example:
 curl -XPOST localhost:8125/exit?delay=10
 ```
 
-### Env
+### Environment variables
 
 * `APP_DIR` the app directory, default is `/app`
 * `DEGU_FILE` .degu.json file (full path), default is `<APP_DIR>/.degu.json`
 
 Remote info, setting these variables will override command line args.
-* `REMOTE_TYPE`
-* `REMOTE_URL`
-* `REMOTE_BRANCH`
+* `REMOTE_TYPE` default is argv[0]
+* `REMOTE_URL` default is argv[1]
+* `REMOTE_BRANCH` default is argv[2]
 
 API related options, if .degu.json file is provided then it's override env variables.
 * `DEGU_API_ENABLE` default is `true`
@@ -100,7 +109,7 @@ API related options, if .degu.json file is provided then it's override env varia
 * `DEGU_API_PREFIX` default is `/`
 * `DEGU_API_WHITELIST` IP whitelist (coma separated), by default all is allowed
 
-### /app/.degu.json file example
+### .degu.json file example
 
 ```json
 {

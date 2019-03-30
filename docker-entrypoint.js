@@ -349,7 +349,7 @@ const downloadArchivedCodebase = function () {
       console.error('ERROR:', err.toString())
       process.exit(1)
     }
-  } else if (/^tar|t.z/i.test(ext)) {
+  } else if (/\.(t.?z|tar(\.(z|lzma|xz|lz2?|bz2?|gz2?))?)$/i.test(ext)) {
     let result = childProcess.spawnSync('tar',
       ['-xvf', tmpFile, '-C', tmpDir],
       {
