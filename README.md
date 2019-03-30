@@ -29,7 +29,6 @@ this is not the idea of the container.
 
 ## Usage
 
-
 ```
 docker run dimitrovadrian/degu [git|svn|archive] <URL> [branch]
 ```
@@ -57,12 +56,11 @@ docker run --rm -ti --name myapp \
     https://github.com/fhinkel/nodejs-hello-world
 ```
 
-Or use URL to zip file (or tar files)
+Archive url example:
 
 ```
 docker run --rm -ti --name myapp \
     -p 8080:8080 \
-    -p 8125:8125 \
     dimitrovadrian/degu \
     archive https://github.com/fhinkel/nodejs-hello-world/archive/master.zip
 ```
