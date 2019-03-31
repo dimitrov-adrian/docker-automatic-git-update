@@ -40,6 +40,7 @@ Example:
 
 ```
 docker run --rm -ti --name nodejshelloworld \
+    --restart always
     -p 8080:8080 \
     -p 8125:8125 \
     -v "$HOME/.ssh/id_rsa_demo:/ssh_key" \
@@ -51,6 +52,7 @@ Binding directory to /app is possible but for caching purposes.
 
 ```
 docker run --rm -ti --name nodejshelloworld \
+    --restart always
     -p 8080:8080 \
     -p 8125:8125 \
     -v "$HOME/.ssh/id_rsa_demo:/ssh_key" \
@@ -104,6 +106,7 @@ or by `DEGU_API_PORT` env
 
 ## Environment variables
 
+* `TZ` set time zone, default is `Europe/London`
 * `APP_DIR` the app directory, default is `/app`
 * `DEGU_FILE` .degu.json file (full path), default is `<APP_DIR>/.degu.json`
 
