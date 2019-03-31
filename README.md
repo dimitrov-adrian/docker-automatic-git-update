@@ -1,8 +1,8 @@
 # Degu
 
-![](https://img.shields.io/docker/build/dimitrovadrian/degu.svg)
-![](https://img.shields.io/microbadger/layers/layers/dimitrovadrian/degu/latest.svg)
-![](https://img.shields.io/microbadger/image-size/image-size/dimitrovadrian/degu/latest.svg)
+![](https://img.shields.io/microbadger/layers/dimitrovadrian/degu/latest.svg)
+![](https://img.shields.io/microbadger/image-size/dimitrovadrian/degu/latest.svg)
+![](https://img.shields.io/docker/pulls/dimitrovadrian/degu.svg)
 ![](https://img.shields.io/docker/stars/dimitrovadrian/degu.svg)
 
 Run node apps directly from source remote URL.
@@ -12,13 +12,16 @@ Run node apps directly from source remote URL.
 
 
 ## Image tags
+
+Images are based on [official node images](https://hub.docker.com/_/node/)
+
 * `latest`
 * `node-11`
 * `node-10` (latest)
 * `node-8`
 
 
-### Supported remote sources
+## Supported remote sources
 * GIT
 * SVN
 * Archives: zip, tar, tar.gz, tar.bz2, tar.xz
@@ -36,7 +39,7 @@ docker run dimitrovadrian/degu [git|svn|archive] <URL> [branch]
 Example:
 
 ```
-docker run --rm -ti --name myapp \
+docker run --rm -ti --name nodejshelloworld \
     -p 8080:8080 \
     -p 8125:8125 \
     -v "$HOME/.ssh/id_rsa_demo:/ssh_key" \
@@ -47,7 +50,7 @@ docker run --rm -ti --name myapp \
 Binding directory to /app is possible but for caching purposes.
 
 ```
-docker run --rm -ti --name myapp \
+docker run --rm -ti --name nodejshelloworld \
     -p 8080:8080 \
     -p 8125:8125 \
     -v "$HOME/.ssh/id_rsa_demo:/ssh_key" \
@@ -59,7 +62,7 @@ docker run --rm -ti --name myapp \
 Archive url example:
 
 ```
-docker run --rm -ti --name myapp \
+docker run --rm -ti --name nodejshelloworld \
     -p 8080:8080 \
     dimitrovadrian/degu \
     archive https://github.com/fhinkel/nodejs-hello-world/archive/master.zip
@@ -67,18 +70,20 @@ docker run --rm -ti --name myapp \
 
 App **must** have `package.json` or `.degu.json` file to run the main process.
 
-### GIT ssh private key file
+
+## GIT ssh private key file
 `/ssh_key`
 
 provide as mount like: `-v "$HOME/.ssh/id_rsa_demo:/ssh_key"`
 
-### API
+
+## API
 
 API has very limited features
 
 #### Endpoints
 * `POST` `/<api.prefix>exit` - exit the app, restarting could be handled by docker restart policy supported query options `delay` in seconds and `code` int
-* `GET` `/<api.prefix>` - get info about current instance
+* `GET` `/<api.prefix>` - get info about current instance in JSON format
 
 Info example:
 
@@ -91,7 +96,13 @@ Exit example:
 curl -XPOST localhost:8125/exit?delay=10
 ```
 
-### Environment variables
+### Port
+
+By default API server listen on 8125 port, but could be changed from `.degu.json` file
+or by `DEGU_API_PORT` env
+
+
+## Environment variables
 
 * `APP_DIR` the app directory, default is `/app`
 * `DEGU_FILE` .degu.json file (full path), default is `<APP_DIR>/.degu.json`
@@ -107,7 +118,8 @@ API related options, if .degu.json file is provided then it's override env varia
 * `DEGU_API_PREFIX` default is `/`
 * `DEGU_API_WHITELIST` IP whitelist (coma separated), by default all is allowed
 
-### .degu.json file example
+
+## .degu.json file example
 
 ```json
 {
@@ -131,6 +143,9 @@ API related options, if .degu.json file is provided then it's override env varia
 
 ```
 
+
 ## License & Terms
 **Degu** project is available under the terms of the GPL-v2 or later license.
+
+For node licensing, check [Node License](https://hub.docker.com/_/node/#license)
 
