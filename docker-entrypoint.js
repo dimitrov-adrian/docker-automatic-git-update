@@ -133,9 +133,10 @@ const loadDeguFileOpts = function () {
  */
 const start = function () {
   let i = 0
-  Object.values(deguOpts.steps || [])
+  let steps = Object.values(deguOpts.steps || [])
+  steps
     .forEach(function (step) {
-      console.log(`Info: Executing step ${++i}/${deguOpts.steps.length}`, step, '...')
+      console.log(`Info: Executing step ${++i}/${steps.length}`, step, '...')
 
       if (!Array.isArray(step)) {
         if (typeof step === 'string') {
