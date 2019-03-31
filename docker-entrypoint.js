@@ -349,7 +349,7 @@ const downloadArchivedCodebase = function () {
       console.error('ERROR:', err.toString())
       process.exit(1)
     }
-  } else if (/\.(t.?z|tar(\.(z|lzma|xz|lz2?|bz2?|gz2?))?)$/i.test(ext)) {
+  } else if (!/\.(t.?z|tar(\.(z|lzma|xz|lz2?|bz2?|gz2?))?)$/i.test(ext)) {
     let result = childProcess.spawnSync('tar',
       ['-xvf', tmpFile, '-C', tmpDir],
       {
@@ -359,20 +359,26 @@ const downloadArchivedCodebase = function () {
     if (result.status !== 0) {
       process.exit(result.status)
     }
-  } else {
-    console.error('ERROR: Unsupporteed archive type', ext, 'from', remote.url)
-    process.exit(1)
-  }
 
-  let files = fs.readdirSync(tmpDir)
-  if (files.length === 1) {
-    if (fs.lstatSync(path.join(tmpDir, files[0])).isDirectory()) {
-      fs.renameSync(path.join(tmpDir, files[0]), appDir)
+    let deguFileBasename = path.basename(deguFile)
+    let files = fs.readdirSync(tmpDir)
+      .filter(item => {
+        return item.charAt(0) !== '.' || item === deguFileBasename
+      })
+    console.log(files)
+    if (files.length === 1) {
+      if (fs.lstatSync(path.join(tmpDir, files[0])).isDirectory()) {
+        console.log(`Info: Found single inner directory (${files[0]}) move as app directory ...`)
+        fs.renameSync(path.join(tmpDir, files[0]), appDir)
+      } else {
+        fs.renameSync(tmpDir, files[0])
+      }
     } else {
       fs.renameSync(tmpDir, files[0])
     }
   } else {
-    fs.renameSync(tmpDir, files[0])
+    console.error('ERROR: Unsupporteed archive type', ext, 'from', remote.url)
+    process.exit(1)
   }
 }
 
