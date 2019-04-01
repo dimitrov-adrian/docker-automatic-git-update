@@ -70,7 +70,7 @@ Archive url example:
 docker run --rm -ti --name nodejshelloworld \
     -p 8080:8080 \
     dimitrovadrian/degu \
-    archive https://github.com/fhinkel/nodejs-hello-world/archive/master.zip
+    archive https://github.com/fhinkel/nodejs-hello-world/archive/master.zip nodejs-hello-world-master
 ```
 
 App **must** have `package.json` or `.degu.json` file to run the main process.
