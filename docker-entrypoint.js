@@ -102,6 +102,22 @@ const chmodKeyFileSync = function () {
 }
 
 /**
+ * Sync download file
+ * @param {*} uri
+ */
+const downloadFileSync = function (uri) {
+  const basename = path.basename(uri)
+  const tmpFilePath = path.join(os.tmpdir(), basename)
+  let result = childProcess.spawnSync('wget',
+    ['-c', '-O', tmpFilePath, uri],
+    {
+      detached: false,
+      stdio: 'inherit'
+    })
+  return result.status === 0 ? tmpFilePath : false
+}
+
+/**
  * Reload degu (/app/.degu.json) and reset deguOpts
  * @returns {boolean}
  */
@@ -200,79 +216,70 @@ const exit = function (code) {
   process.exit(code || 0)
 }
 
-/**
- * Git init
- * @param url
- */
-const gitInitSync = function () {
+const updateCodebaseFromGit = function () {
   chmodKeyFileSync()
-  let result = childProcess.spawnSync('git',
-    ['clone', '--depth', '1', '--recurse-submodules', '-j8', '-b', remote.branch, '--single-branch', remote.url, appDir],
-    {
-      detached: false,
-      stdio: 'inherit',
-      cwd: process.cwd()
+  if (fs.existsSync(path.join(appDir, '.git'))) {
+    let result
+    result = childProcess.spawnSync('git', ['config', '--get', 'remote.origin.url'], {
+      cwd: appDir,
+      stdio: 'pipe',
+      encoding: 'utf-8'
     })
 
-  if (result.status !== 0) {
-    process.exit(result.status)
-  }
-}
+    if (result.status !== 0) {
+      process.exit(result.status)
+    }
 
-/**
- * Git update.
- * @param callback
- * @returns {boolean}
- */
-const gitUpdateSync = function () {
-  let result
-  result = childProcess.spawnSync('git', ['config', '--get', 'remote.origin.url'], {
-    cwd: appDir,
-    stdio: 'pipe',
-    encoding: 'utf-8'
-  })
+    if (result.stdout) {
+      result = String(result.stdout).trim()
+      if (result !== remote.url) {
+        console.error(`ERROR: Remote of ${appDir} (${result}) is different than local (${remote.url})`)
+        process.exit(1)
+      }
+    }
 
-  if (result.stdout) {
-    result = String(result.stdout).trim()
-    if (result !== remote.url) {
-      console.error(`ERROR: Remote of ${appDir} (${result}) is different than local (${remote.url})`)
-      process.exit(1)
+    result = childProcess.spawnSync('git',
+      ['reset', '--hard', 'origin'],
+      {
+        detached: false,
+        stdio: 'inherit',
+        cwd: appDir
+      })
+
+    if (result.status !== 0) {
+      process.exit(result.status)
+    }
+
+    result = childProcess.spawnSync('git',
+      ['pull'],
+      {
+        detached: false,
+        stdio: 'inherit',
+        cwd: appDir
+      })
+
+    if (result.status !== 0) {
+      process.exit(result.status)
+    }
+  } else {
+    let result = childProcess.spawnSync('git',
+      ['clone', '--depth', '1', '--recurse-submodules', '-j8', '-b', remote.branch, '--single-branch', remote.url, appDir],
+      {
+        detached: false,
+        stdio: 'inherit',
+        cwd: process.cwd()
+      })
+
+    if (result.status !== 0) {
+      process.exit(result.status)
     }
   }
-
-  chmodKeyFileSync()
-
-  result = childProcess.spawnSync('git',
-    ['reset', '--hard', 'origin'],
-    {
-      detached: false,
-      stdio: 'inherit',
-      cwd: appDir
-    })
-
-  if (result.status !== 0) {
-    process.exit(result.status)
-  }
-
-  result = childProcess.spawnSync('git',
-    ['pull'],
-    {
-      detached: false,
-      stdio: 'inherit',
-      cwd: appDir
-    })
-
-  if (result.status !== 0) {
-    process.exit(result.status)
-  }
-
-  return true
 }
 
 /**
  * Downlaod from SVN
  */
-const svnCheckout = function () {
+const updateCodebaseFromSvn = function () {
   chmodKeyFileSync()
 
   let repositoryUrl = remote.url
@@ -294,27 +301,11 @@ const svnCheckout = function () {
 }
 
 /**
- * Sync download file
- * @param {*} uri
- */
-const downloadFileSync = function (uri) {
-  const basename = path.basename(uri)
-  const tmpFilePath = path.join(os.tmpdir(), basename)
-  let result = childProcess.spawnSync('wget',
-    ['-c', '-O', tmpFilePath, uri],
-    {
-      detached: false,
-      stdio: 'inherit'
-    })
-  return result.status === 0 ? tmpFilePath : false
-}
-
-/**
  * Download archived codebase, and extract to app directory.
  * @param uri
  * @returns {Promise<any>}
  */
-const downloadArchivedCodebase = function () {
+const updateCodebaseFromArchive = function () {
   if (fs.existsSync(appDir)) {
     console.error('ERROR: App directory already exists.')
     process.exit(1)
@@ -392,15 +383,11 @@ const updateCodebase = function () {
     console.log(`Info: Downloading codebase from remote ${remote.type} ${remote.url} ...`)
   }
   if (remote.type === 'git') {
-    if (fs.existsSync(path.join(appDir, '.git'))) {
-      gitUpdateSync()
-    } else {
-      gitInitSync()
-    }
+    updateCodebaseFromGit()
   } else if (remote.type === 'archive') {
-    downloadArchivedCodebase()
+    updateCodebaseFromArchive()
   } else if (remote.type === 'svn') {
-    svnCheckout()
+    updateCodebaseFromSvn()
   } else {
     let files = fs.readdirSync(appDir)
     if (files.length > 0) {

@@ -13,12 +13,12 @@ Run node apps directly from source remote URL.
 
 ## Image tags
 
-Images are based on [official node images](https://hub.docker.com/_/node/)
+Node images are base on [official node alpin images](https://hub.docker.com/_/node/)
 
-* `latest`
-* `node-11`
-* `node-10` (latest)
-* `node-8`
+* [`latest`](https://github.com/dimitrov-adrian/degu/blob/master/node/10-alpine/Dockerfile)
+* [`node-11`](https://github.com/dimitrov-adrian/degu/blob/master/node/11-alpine/Dockerfile)
+* [`node-10` (latest)](https://github.com/dimitrov-adrian/degu/blob/master/node/10-alpine/Dockerfile)
+* [`node-8`](https://github.com/dimitrov-adrian/degu/blob/master/node/8-alpine/Dockerfile)
 
 
 ## Supported remote sources
@@ -33,7 +33,7 @@ this is not the idea of the container.
 ## Usage
 
 ```
-docker run dimitrovadrian/degu [git|svn|archive] <URL> [branch]
+docker run dimitrovadrian/degu[:tag] [git|svn|archive] <URL> [branch]
 ```
 
 Example:
