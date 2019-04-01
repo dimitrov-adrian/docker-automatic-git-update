@@ -36,6 +36,9 @@ this is not the idea of the container.
 docker run dimitrovadrian/degu[:tag] [git|svn|archive] <URL> [branch]
 ```
 
+* In SVN context, branch could be also passed to URL
+* In archive URLs context, branch is representing inner path or directory name
+
 Example:
 
 ```

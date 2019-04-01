@@ -351,25 +351,32 @@ const updateCodebaseFromArchive = function () {
     if (result.status !== 0) {
       process.exit(result.status)
     }
+  } else {
+    console.error('ERROR: Unsupporteed archive type', ext, 'from', remote.url)
+    process.exit(1)
+  }
 
+  let branch = remote.branch
+  if (!branch) {
     let deguFileBasename = path.basename(deguFile)
     let files = fs.readdirSync(tmpDir)
       .filter(item => {
         return item.charAt(0) !== '.' || item === deguFileBasename
       })
-    console.log(files)
     if (files.length === 1) {
-      if (fs.lstatSync(path.join(tmpDir, files[0])).isDirectory()) {
-        console.log(`Info: Found single inner directory (${files[0]}) move as app directory ...`)
-        fs.renameSync(path.join(tmpDir, files[0]), appDir)
-      } else {
-        fs.renameSync(tmpDir, files[0])
-      }
-    } else {
-      fs.renameSync(tmpDir, files[0])
+      console.log('Info: Detected inner directory as branch', files[0])
+      branch = files[0]
     }
-  } else {
-    console.error('ERROR: Unsupporteed archive type', ext, 'from', remote.url)
+  }
+
+  try {
+    if (branch) {
+      fs.renameSync(path.join(tmpDir, branch), appDir)
+    } else {
+      fs.renameSync(tmpDir, appDir)
+    }
+  } catch (err) {
+    console.error('ERROR: While installing app directory', err.toString())
     process.exit(1)
   }
 }
