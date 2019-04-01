@@ -17,12 +17,12 @@ let appProcess
 const time = new Date()
 
 /**
- * Run ID
+ * Random generated run ID
  */
-const runId = crypto.randomBytes(20).toString('hex')
+const runId = crypto.randomBytes(8).toString('hex')
 
 /**
- * App directory, defaults to /app, in some cases may need to set other.
+ * App directory, defaults to /app, in some cases may need to set other
  */
 const appDir = process.env.APP_DIR || '/app'
 
@@ -63,7 +63,7 @@ const remote = {
   url: process.env.REMOTE_URL || process.argv[3] || '',
 
   /**
-   * BRANCH
+   * Branch (could be also inner directory)
    */
   branch: process.env.REMOTE_BRANCH || process.argv[4] || ''
 }
@@ -216,6 +216,9 @@ const exit = function (code) {
   process.exit(code || 0)
 }
 
+/**
+ * Fetch codebase from GIT repository
+ */
 const updateCodebaseFromGit = function () {
   chmodKeyFileSync()
   if (fs.existsSync(path.join(appDir, '.git'))) {
@@ -277,7 +280,7 @@ const updateCodebaseFromGit = function () {
 }
 
 /**
- * Downlaod from SVN
+ * Fetch codebase from SVN repository
  */
 const updateCodebaseFromSvn = function () {
   chmodKeyFileSync()
@@ -301,9 +304,7 @@ const updateCodebaseFromSvn = function () {
 }
 
 /**
- * Download archived codebase, and extract to app directory.
- * @param uri
- * @returns {Promise<any>}
+ * Fetch codebase from archive URL
  */
 const updateCodebaseFromArchive = function () {
   if (fs.existsSync(appDir)) {
@@ -382,8 +383,7 @@ const updateCodebaseFromArchive = function () {
 }
 
 /**
- *
- * @returns {*}
+ * Update codebase from remote.
  */
 const updateCodebase = function () {
   if (remote.url) {
@@ -408,8 +408,6 @@ const updateCodebase = function () {
 
 /**
  * Start web manager API
- *
- * @param port
  */
 const startManagerApi = function () {
   if (!deguOpts.api.enable || !deguOpts.api.port) {
