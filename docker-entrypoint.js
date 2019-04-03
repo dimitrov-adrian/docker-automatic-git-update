@@ -200,7 +200,7 @@ const start = function () {
     })
 
   appProcess.on('exit', (status, signal) => {
-    process.exit(status)
+    process.exit(status || 0)
   })
 }
 
@@ -213,7 +213,6 @@ const exit = function (code) {
     return
   }
   appProcess.kill()
-  process.exit(code || 0)
 }
 
 /**
