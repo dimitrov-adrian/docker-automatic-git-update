@@ -45,6 +45,10 @@ const deguOpts = {
     port: process.env.DEGU_API_PORT || 8125,
     prefix: process.env.DEGU_API_PREFIX || '/',
     whitelist: process.env.DEGU_API_WHITELIST || []
+  },
+  puller: {
+    enable: process.env.DEGU_PULLER_ENABLE || false,
+    interval: process.env.DEGU_PULLER_INTERVAL || 21600
   }
 }
 
@@ -84,6 +88,11 @@ if (!remote.branch) {
 }
 
 /**
+ * Hold local codebase revision id
+ */
+let revisionIdLocal = ''
+
+/**
  * Chmodding /ssh_key file with proper modes.
  */
 const chmodKeyFileSync = function () {
@@ -115,6 +124,29 @@ const downloadFileSync = function (uri) {
       stdio: 'inherit'
     })
   return result.status === 0 ? tmpFilePath : false
+}
+
+/**
+ * From URL content get hash by headers
+ * @param {*} url
+ * @returns {String}
+ */
+const getUrlHash = function (url) {
+  let headers = childProcess.spawnSync('wget',
+    ['-q', '-S', '--spider', url],
+    {
+      detached: false,
+      stdio: 'pipe',
+      silent: true
+    })
+  headers = headers.output[2]
+    .toString('utf8')
+    .split('\n')
+    .map(item => item.trim())
+    .filter(item => /^etag|last-modified|content-length/i.test(item))
+    .sort()
+    .join('')
+  return crypto.createHash('md5').update(headers).digest('hex')
 }
 
 /**
@@ -212,7 +244,7 @@ const exit = function (code) {
   if (!appProcess) {
     return
   }
-  appProcess.kill()
+  appProcess.kill(code || 0)
 }
 
 /**
@@ -276,6 +308,14 @@ const updateCodebaseFromGit = function () {
       process.exit(result.status)
     }
   }
+
+  revisionIdLocal = childProcess.spawnSync('git',
+    ['rev-parse', '@{u}'],
+    {
+      detached: false,
+      stdio: 'inherit',
+      cwd: process.cwd()
+    })
 }
 
 /**
@@ -300,6 +340,14 @@ const updateCodebaseFromSvn = function () {
   if (result.status !== 0) {
     process.exit(result.status)
   }
+
+  revisionIdLocal = childProcess.spawnSync('svn',
+    ['info', '--show-item', 'revision'],
+    {
+      detached: false,
+      stdio: 'inherit',
+      cwd: process.cwd()
+    })
 }
 
 /**
@@ -462,6 +510,49 @@ const startManagerApi = function () {
     .listen(deguOpts.api.port)
 }
 
+/**
+ * Start web manager API
+ */
+const startPuller = function () {
+  if (!remote.url || !deguOpts.puller.enable || !deguOpts.puller.interval) {
+    return
+  }
+
+  /**
+   * Check function
+   */
+  const checker = function () {
+    let revisionIdRemote = ''
+
+    if (remote.type === 'git') {
+      revisionIdLocal = childProcess.spawnSync('git',
+        ['git', 'ls-remote', 'origin', remote.branch],
+        {
+          detached: false,
+          stdio: 'inherit',
+          cwd: process.cwd()
+        })
+    } else if (remote.type === 'archive') {
+      revisionIdRemote = getUrlHash(remote.url)
+    } else if (remote.type === 'svn') {
+      revisionIdRemote = childProcess.spawnSync('svn',
+        ['info', '--show-item', 'revision', remote.url],
+        {
+          detached: false,
+          stdio: 'inherit',
+          cwd: process.cwd()
+        })
+    }
+
+    if (revisionIdRemote && revisionIdLocal && revisionIdRemote !== revisionIdLocal) {
+      exit()
+    }
+  }
+
+  // setup interval
+  setInterval(checker, deguOpts.puller.interval * 1000)
+}
+
 console.log(`Info: App is starting up #${runId} ...`)
 
 // Update codebase.
@@ -478,6 +569,9 @@ if (!(fs.existsSync(path.join(appDir, 'package.json')) || fs.existsSync(deguFile
 
 // Start web managemenet API.
 startManagerApi()
+
+// Start the puller
+startPuller()
 
 // Start main process.
 start()

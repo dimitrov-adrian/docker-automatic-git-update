@@ -13,7 +13,7 @@ Run node apps directly from source remote URL.
 
 ## Image tags
 
-Node images are base on [official node alpin images](https://hub.docker.com/_/node/)
+Node images are base on [official node alpine images](https://hub.docker.com/_/node/)
 
 * [`latest`](https://github.com/dimitrov-adrian/degu/blob/master/node/10-alpine/Dockerfile)
 * [`node-11`](https://github.com/dimitrov-adrian/degu/blob/master/node/11-alpine/Dockerfile)
@@ -106,6 +106,10 @@ curl -XPOST localhost:8125/exit?delay=10
 By default API server listen on 8125 port, but could be changed from `.degu.json` file
 or by `DEGU_API_PORT` env
 
+## Puller
+
+Puller is checker that run in interval, it could be used if case that API request cannot be made. For archives it use combination of `Last-Modified`, `Etag`, `Content-Size` to do a checksum.
+
 
 ## Environment variables
 
@@ -123,6 +127,10 @@ API related options, if .degu.json file is provided then it's override env varia
 * `DEGU_API_PORT` default is 8125
 * `DEGU_API_PREFIX` default is `/`
 * `DEGU_API_WHITELIST` IP whitelist (coma separated), by default all is allowed
+
+Puller related options, if .degu.json file is provided then it's override env variables.
+* `DEGU_PULLER_ENABLE` default is `false`
+* `DEGU_PULLER_INTERVAL` default is 21600 (6 hours)
 
 
 ## .degu.json file example
@@ -144,6 +152,10 @@ API related options, if .degu.json file is provided then it's override env varia
     "whiteList": [
       "127.0.0.1"
     ]
+  },
+  "puller": {
+    "enable": true,
+    "interval": 21600
   }
 }
 
@@ -151,7 +163,6 @@ API related options, if .degu.json file is provided then it's override env varia
 
 
 ## License & Terms
-**Degu** project is available under the terms of the GPL-v2 or later license.
+This project is licensed under the [MIT](https://github.com/dimitrov-adrian/degu/blob/master/LICENSE.txt) License
 
-For node licensing, check [Node License](https://hub.docker.com/_/node/#license)
-
+Node.js official docker image [license](https://hub.docker.com/_/node/#license)
