@@ -155,7 +155,7 @@ const getUrlHash = function (url) {
  */
 const loadDeguFileOpts = function () {
   if (fs.existsSync(deguFile)) {
-    console.log(`Info: Load ${deguFile}`)
+    console.log(`Info: Load "${deguFile}"`)
     let deguFileOpts = require(deguFile)
     Object.keys(deguFileOpts).map((key, index) => {
       if (deguOpts.hasOwnProperty(key)) {
@@ -171,7 +171,7 @@ const loadDeguFileOpts = function () {
     })
     return true
   } else {
-    console.log(`Info: ${deguFile} not found, going defaults ...`)
+    console.log(`Info: "${deguFile}" not found, going defaults ...`)
     return false
   }
 }
@@ -300,8 +300,7 @@ const updateCodebaseFromGit = function () {
       ['clone', '--depth', '1', '--recurse-submodules', '-j8', '-b', remote.branch, '--single-branch', remote.url, appDir],
       {
         detached: false,
-        stdio: 'inherit',
-        cwd: process.cwd()
+        stdio: 'inherit'
       })
 
     if (result.status !== 0) {
@@ -312,10 +311,9 @@ const updateCodebaseFromGit = function () {
   revisionIdLocal = childProcess.spawnSync('git',
     ['rev-parse', '@{u}'],
     {
-      detached: false,
-      stdio: 'inherit',
-      cwd: process.cwd()
+      cwd: appDir
     })
+    .stdout.toString().trim()
 }
 
 /**
@@ -334,7 +332,7 @@ const updateCodebaseFromSvn = function () {
     {
       detached: false,
       stdio: 'inherit',
-      cwd: process.cwd()
+      cwd: appDir
     })
 
   if (result.status !== 0) {
@@ -344,10 +342,9 @@ const updateCodebaseFromSvn = function () {
   revisionIdLocal = childProcess.spawnSync('svn',
     ['info', '--show-item', 'revision'],
     {
-      detached: false,
-      stdio: 'inherit',
-      cwd: process.cwd()
+      cwd: appDir
     })
+    .stdout.toString().trim()
 }
 
 /**
@@ -427,6 +424,8 @@ const updateCodebaseFromArchive = function () {
     console.error('ERROR: While installing app directory', err.toString())
     process.exit(1)
   }
+
+  revisionIdLocal = getUrlHash(remote.url)
 }
 
 /**
@@ -434,7 +433,7 @@ const updateCodebaseFromArchive = function () {
  */
 const updateCodebase = function () {
   if (remote.url) {
-    console.log(`Info: Downloading codebase from remote ${remote.type} ${remote.url} ...`)
+    console.log(`Info: Downloading codebase from remote ${remote.type.toUpperCase()} "${remote.url}" ...`)
   }
   if (remote.type === 'git') {
     updateCodebaseFromGit()
@@ -462,7 +461,7 @@ const startManagerApi = function () {
   }
 
   const prefix = '/' + (deguOpts.api.prefix || '/').replace(/^\//, '')
-  console.log(`Info: Starting web management API port=${deguOpts.api.port} prefix=${prefix} ...`)
+  console.log(`Info: Starting web management API port: "${deguOpts.api.port}" prefix: "${prefix}" ...`)
 
   let whitelist = deguOpts.api.whitelist
   if (typeof whitelist === 'string') {
@@ -487,6 +486,7 @@ const startManagerApi = function () {
       response.setHeader('Content-Type', 'application/json')
       response.end(JSON.stringify({
         runId: runId,
+        revision: revisionIdLocal,
         uptime: (((new Date()) - time) / 1000).toFixed(3).toString(),
         env: process.env,
         deguOpts: deguOpts,
@@ -514,7 +514,7 @@ const startManagerApi = function () {
  * Start web manager API
  */
 const startPuller = function () {
-  if (!remote.url || !deguOpts.puller.enable || !deguOpts.puller.interval) {
+  if (!remote.type || !remote.url || !deguOpts.puller.enable || !deguOpts.puller.interval) {
     return
   }
 
@@ -550,6 +550,7 @@ const startPuller = function () {
   }
 
   // setup interval
+  console.log(`Info: Starting codebase puller with interval of ${deguOpts.puller.interval}sec. ...`)
   setInterval(checker, deguOpts.puller.interval * 1000)
 }
 
@@ -557,6 +558,8 @@ console.log(`Info: App is starting up #${runId} ...`)
 
 // Update codebase.
 updateCodebase()
+
+console.log(`Info: Codebase revision: "${revisionIdLocal}"`)
 
 // Reload file.
 loadDeguFileOpts()
