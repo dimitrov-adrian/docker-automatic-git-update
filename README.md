@@ -5,7 +5,7 @@
 ![](https://img.shields.io/docker/pulls/dimitrovadrian/degu.svg)
 ![](https://img.shields.io/docker/stars/dimitrovadrian/degu.svg)
 
-Run node apps directly from source remote URL.
+Run node apps directly from source remote URL. It is like docker watchtower but for Node.js apps.
 
 
 > ***Notice*** *This container is not intended for production use, it just provide an easy way to deploy apps for testing purposes.*
@@ -154,7 +154,7 @@ Puller related options, if .degu.json file is provided then it's override env va
     ]
   },
   "puller": {
-    "enable": true,
+    "enable": false,
     "interval": 21600
   }
 }
