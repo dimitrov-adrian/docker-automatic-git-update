@@ -5,7 +5,7 @@
 ![](https://img.shields.io/docker/pulls/dimitrovadrian/degu.svg)
 ![](https://img.shields.io/docker/stars/dimitrovadrian/degu.svg)
 
-Run node apps directly from source remote URL. It is like docker watchtower but for Node.js apps.
+Run node apps directly from remote source URL (Git, SVN or even url to zip archive). It is like docker watchtower but for Node.js apps.
 
 
 > ***Notice*** *This container is not intended for production use, it just provide an easy way to deploy apps for testing purposes.*
@@ -88,7 +88,7 @@ docker run --rm -ti --name nodejshelloworld \
 App **must** have `package.json` or `.degu.json` file to run the main process.
 
 
-## GIT ssh private key file
+## GIT/SVN ssh private key file
 `/ssh_key`
 
 provide as mount like: `-v "$HOME/.ssh/id_rsa_demo:/ssh_key"`
@@ -142,7 +142,7 @@ API related options, if .degu.json file is provided then it's override env varia
 
 Puller related options, if .degu.json file is provided then it's override env variables.
 * `DEGU_PULLER_ENABLE` default is `false`
-* `DEGU_PULLER_INTERVAL` default is 21600 (6 hours)
+* `DEGU_PULLER_INTERVAL` interval in seconds, default is 21600 (6 hours)
 
 
 ## .degu.json file example
