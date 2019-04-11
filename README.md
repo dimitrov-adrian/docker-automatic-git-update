@@ -64,6 +64,18 @@ docker run --rm -ti --name nodejshelloworld \
     https://github.com/fhinkel/nodejs-hello-world
 ```
 
+Download from SVN
+```
+docker run --rm -ti --name nodejshelloworld \
+    --restart always
+    -p 8080:8080 \
+    -p 8125:8125 \
+    -v "$HOME/.ssh/id_rsa_demo:/ssh_key" \
+    -v "/tmp/app.cache:/app" \
+    dimitrovadrian/degu \
+    svn https://github.com/fhinkel/nodejs-hello-world trunk
+```
+
 Archive url example:
 
 ```

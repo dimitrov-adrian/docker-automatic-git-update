@@ -120,7 +120,6 @@ const downloadFileSync = function (uri) {
   let result = childProcess.spawnSync('wget',
     ['-c', '-O', tmpFilePath, uri],
     {
-      detached: false,
       stdio: 'inherit'
     })
   return result.status === 0 ? tmpFilePath : false
@@ -135,7 +134,6 @@ const getUrlHash = function (url) {
   let headers = childProcess.spawnSync('wget',
     ['-q', '-S', '--spider', url],
     {
-      detached: false,
       stdio: 'pipe',
       silent: true
     })
@@ -196,7 +194,6 @@ const start = function () {
 
       let result = childProcess
         .spawnSync(step[0], step.slice(1), {
-          detached: false,
           stdio: 'inherit',
           env: {
             ...process.env,
@@ -222,7 +219,6 @@ const start = function () {
   console.log('Info: Executing main process', mainCommand, '...')
   appProcess = childProcess
     .spawn(mainCommand[0], mainCommand.slice(1), {
-      detached: false,
       stdio: 'inherit',
       env: {
         ...process.env,
@@ -240,11 +236,12 @@ const start = function () {
  * Exit app process.
  */
 const exit = function (code) {
-  console.log('Info: Exiting ...')
   if (!appProcess) {
     return
   }
+  console.log('Info: Exiting ...')
   appProcess.kill(code || 0)
+  process.exit(code || 0)
 }
 
 /**
@@ -275,7 +272,6 @@ const updateCodebaseFromGit = function () {
     result = childProcess.spawnSync('git',
       ['reset', '--hard', 'origin'],
       {
-        detached: false,
         stdio: 'inherit',
         cwd: appDir
       })
@@ -287,7 +283,6 @@ const updateCodebaseFromGit = function () {
     result = childProcess.spawnSync('git',
       ['pull'],
       {
-        detached: false,
         stdio: 'inherit',
         cwd: appDir
       })
@@ -299,7 +294,6 @@ const updateCodebaseFromGit = function () {
     let result = childProcess.spawnSync('git',
       ['clone', '--depth', '1', '--recurse-submodules', '-j8', '-b', remote.branch, '--single-branch', remote.url, appDir],
       {
-        detached: false,
         stdio: 'inherit'
       })
 
@@ -330,9 +324,7 @@ const updateCodebaseFromSvn = function () {
   let result = childProcess.spawnSync('svn',
     ['export', '--force', repositoryUrl, appDir],
     {
-      detached: false,
-      stdio: 'inherit',
-      cwd: appDir
+      stdio: 'inherit'
     })
 
   if (result.status !== 0) {
@@ -340,11 +332,10 @@ const updateCodebaseFromSvn = function () {
   }
 
   revisionIdLocal = childProcess.spawnSync('svn',
-    ['info', '--show-item', 'revision'],
+    ['info', '--show-item', 'revision', remote.url],
     {
       cwd: appDir
-    })
-    .stdout.toString().trim()
+    }).stdout.toString().trim()
 }
 
 /**
@@ -376,7 +367,6 @@ const updateCodebaseFromArchive = function () {
       let result = childProcess.spawnSync('unzip',
         ['-o', '-d', tmpDir, tmpFile],
         {
-          detached: false,
           stdio: 'inherit'
         })
       if (result.status !== 0) {
@@ -390,7 +380,6 @@ const updateCodebaseFromArchive = function () {
     let result = childProcess.spawnSync('tar',
       ['-xvf', tmpFile, '-C', tmpDir],
       {
-        detached: false,
         stdio: 'inherit'
       })
     if (result.status !== 0) {
@@ -441,7 +430,7 @@ const updateCodebase = function () {
     updateCodebaseFromArchive()
   } else if (remote.type === 'svn') {
     updateCodebaseFromSvn()
-  } else {
+  } else if (fs.existsSync(appDir)) {
     let files = fs.readdirSync(appDir)
     if (files.length > 0) {
       console.log('Warning: No supported remote is set, starting from directory', remote)
@@ -449,6 +438,10 @@ const updateCodebase = function () {
       console.error('ERROR: No supported remote is set.', remote)
       process.exit(1)
     }
+  } else {
+    console.error('ERROR: Unknown remote type', remote)
+    console.error('ERROR: No app directory')
+    process.exit(1)
   }
 }
 
@@ -525,26 +518,24 @@ const startPuller = function () {
     let revisionIdRemote = ''
 
     if (remote.type === 'git') {
-      revisionIdLocal = childProcess.spawnSync('git',
-        ['git', 'ls-remote', 'origin', remote.branch],
+      revisionIdRemote = childProcess.spawnSync('git',
+        ['ls-remote', 'origin', remote.branch],
         {
-          detached: false,
-          stdio: 'inherit',
-          cwd: process.cwd()
-        })
+          cwd: appDir
+        }).stdout.toString().trim()
+      revisionIdRemote = (revisionIdRemote || '').split(/\s+/).shift()
     } else if (remote.type === 'archive') {
       revisionIdRemote = getUrlHash(remote.url)
     } else if (remote.type === 'svn') {
       revisionIdRemote = childProcess.spawnSync('svn',
         ['info', '--show-item', 'revision', remote.url],
         {
-          detached: false,
-          stdio: 'inherit',
-          cwd: process.cwd()
-        })
+          cwd: appDir
+        }).stdout.toString().trim()
     }
 
     if (revisionIdRemote && revisionIdLocal && revisionIdRemote !== revisionIdLocal) {
+      console.log(`Info: Puller exit because of new codebase version new: ${revisionIdRemote}, old: ${revisionIdLocal}`)
       exit()
     }
   }
