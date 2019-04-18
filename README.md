@@ -33,7 +33,7 @@ this is not the idea of the container.
 ## Usage
 
 ```
-docker run dimitrovadrian/degu[:tag] [git|svn|archive] <URL> [branch]
+docker run dimitrovadrian/degu[:tag] [git|svn|archive] [URL [branch]]
 ```
 
 * In SVN context, branch could be also passed to URL
@@ -93,6 +93,12 @@ App **must** have `package.json` or `.degu.json` file to run the main process.
 
 provide as mount like: `-v "$HOME/.ssh/id_rsa_demo:/ssh_key"`
 
+Supports also directories and:
+* `/ssh_key/<remote_host>`
+* `/ssh_key/<container_host>_id_rsa`
+* `/ssh_key/id_rsa`
+
+If no ssh_key file is provided, then it will be automatically generated one, and display the public file in the console.
 
 ## API
 
@@ -142,7 +148,7 @@ API related options, if .degu.json file is provided then it's override env varia
 
 Puller related options, if .degu.json file is provided then it's override env variables.
 * `DEGU_PULLER_ENABLE` default is `false`
-* `DEGU_PULLER_INTERVAL` interval in seconds, default is 21600 (6 hours)
+* `DEGU_PULLER_INTERVAL` interval seconds, default is "1h", supported formats: "Ns Nm Nh" example: "6h 15m 30s"
 
 
 ## .degu.json file example

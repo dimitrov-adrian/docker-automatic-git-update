@@ -48,7 +48,7 @@ const deguOpts = {
   },
   puller: {
     enable: process.env.DEGU_PULLER_ENABLE || false,
-    interval: process.env.DEGU_PULLER_INTERVAL || 21600
+    interval: process.env.DEGU_PULLER_INTERVAL || '1h'
   }
 }
 
@@ -59,7 +59,7 @@ const remote = {
   /**
    * Type
    */
-  type: (process.env.REMOTE_TYPE || process.argv[2] || '').toLowerCase(),
+  type: (process.env.REMOTE_TYPE || process.argv[2] || '').toUpperCase(),
 
   /**
    * URL
@@ -72,17 +72,31 @@ const remote = {
   branch: process.env.REMOTE_BRANCH || process.argv[4] || ''
 }
 
+/**
+ * Remote type autoguessing
+ */
 if (!remote.branch && !remote.url && remote.type) {
   remote.url = remote.type
-  remote.type = 'git'
+  remote.type = 'GIT'
 } else if (remote.type && remote.type.split('.').length > 1 && remote.url) {
   remote.branch = remote.url
   remote.url = remote.type
-  remote.type = 'git'
+  remote.type = 'GIT'
 }
-
+if (!remote.type && remote.url) {
+  if (/\.(zip|t.?z|tar(\.(z|lzma|xz|lz2?|bz2?|gz2?))?)$/i.test(remote.url)) {
+    remote.type = 'ARCHIVE'
+  } else if (/\bsvn\b/i.test(remote.url)) {
+    remote.type = 'SVN'
+  } else {
+    remote.type = 'GIT'
+  }
+}
+/**
+ * Branch autoguessing.
+ */
 if (!remote.branch) {
-  if (remote.type === 'git') {
+  if (remote.type === 'GIT') {
     remote.branch = 'master'
   }
 }
@@ -93,21 +107,57 @@ if (!remote.branch) {
 let revisionIdLocal = ''
 
 /**
- * Chmodding /ssh_key file with proper modes.
+ * Calculate string interval in seconds.
+ * @param {*} interval
  */
-const chmodKeyFileSync = function () {
-  if (fs.existsSync('/ssh_key')) {
-    try {
-      fs.chmodSync('/ssh_key', 0o600)
-      return true
-    } catch (err) {
-      console.error('Warning: Cannot chmod key file "/ssh_key", ensure the passed key file have recommended modes 0600.')
-      return false
-    }
-  } else {
-    console.error('Info: No private key file "/ssh_key"')
-    return false
+const calculateInterval = interval => interval
+  .replace(/(\d+)h/i, (str, val) => val * 60 * 60)
+  .replace(/(\d+)m/i, (str, val) => val * 60)
+  .replace(/(\d+)s/i, (str, val) => val)
+  .split(/[^\d]/)
+  .reduce((a, b) => parseFloat(a) + parseFloat(b), 0)
+
+/**
+ * Preparing /ssh_key
+ */
+const checkPrivateKey = function () {
+  let keysPath = '/ssh_key'
+  let exists = fs.existsSync(keysPath)
+  let isDir = exists && fs.lstatSync(keysPath).isDirectory()
+
+  if (exists && isDir) {
+    fs.chmodSync(keysPath, 0o700)
+    keysPath = path.join(keysPath, process.env.HOSTNAME + '_id_rsa')
+    exists = fs.existsSync(keysPath)
   }
+
+  if (exists) {
+    try {
+      console.error(`Info: Found ssh private key file "${keysPath}"`)
+      fs.chmodSync(keysPath, 0o600)
+    } catch (err) {
+      console.error(`Warning: Cannot chmod key file "${keysPath}", ensure the passed key file have recommended modes 0600.`)
+    }
+    return
+  }
+
+  console.error(`Info: No private key file "${keysPath}", generating one ...`)
+  let result = childProcess.spawnSync('ssh-keygen',
+    ['-b', 4096, '-t', 'rsa', '-f', keysPath, '-q', '-N', ''],
+    {
+      stdio: 'pipe',
+      silent: true
+    })
+  if (result.status !== 0 || !fs.existsSync(keysPath + '.pub')) {
+    console.log('ERROR: Could not generate ssh key file, try to provide via mounts.')
+    process.exit(1)
+  }
+  fs.chmodSync(keysPath, 0o600)
+  let publicKeyContent = fs.readFileSync(keysPath + '.pub')
+  console.log('Info: Public ssh key is generated, copy it as deployment key if need.')
+  console.log('-'.repeat(69))
+  console.log(publicKeyContent.toString().match(/.{0,69}/g).join('\n').trim())
+  console.log('-'.repeat(69))
 }
 
 /**
@@ -157,7 +207,9 @@ const loadDeguFileOpts = function () {
     let deguFileOpts = require(deguFile)
     Object.keys(deguFileOpts).map((key, index) => {
       if (deguOpts.hasOwnProperty(key)) {
-        if (typeof deguOpts[key] === 'object') {
+        if (Array.isArray(deguOpts[key])) {
+          deguOpts[key] = deguFileOpts[key]
+        } else if (typeof deguOpts[key] === 'object') {
           deguOpts[key] = {
             ...deguOpts[key],
             ...deguFileOpts[key]
@@ -248,7 +300,6 @@ const exit = function (code) {
  * Fetch codebase from GIT repository
  */
 const updateCodebaseFromGit = function () {
-  chmodKeyFileSync()
   if (fs.existsSync(path.join(appDir, '.git'))) {
     let result
     result = childProcess.spawnSync('git', ['config', '--get', 'remote.origin.url'], {
@@ -314,8 +365,6 @@ const updateCodebaseFromGit = function () {
  * Fetch codebase from SVN repository
  */
 const updateCodebaseFromSvn = function () {
-  chmodKeyFileSync()
-
   let repositoryUrl = remote.url
   if (remote.branch) {
     repositoryUrl += '/' + remote.branch
@@ -422,13 +471,13 @@ const updateCodebaseFromArchive = function () {
  */
 const updateCodebase = function () {
   if (remote.url) {
-    console.log(`Info: Downloading codebase from remote ${remote.type.toUpperCase()} "${remote.url}" ...`)
+    console.log(`Info: Downloading codebase from remote ${remote.type} "${remote.url}" ...`)
   }
-  if (remote.type === 'git') {
+  if (remote.type === 'GIT') {
     updateCodebaseFromGit()
-  } else if (remote.type === 'archive') {
+  } else if (remote.type === 'ARCHIVE') {
     updateCodebaseFromArchive()
-  } else if (remote.type === 'svn') {
+  } else if (remote.type === 'SVN') {
     updateCodebaseFromSvn()
   } else if (fs.existsSync(appDir)) {
     let files = fs.readdirSync(appDir)
@@ -443,6 +492,8 @@ const updateCodebase = function () {
     console.error('ERROR: No app directory')
     process.exit(1)
   }
+
+  console.log(`Info: Codebase revision: "${revisionIdLocal}"`)
 }
 
 /**
@@ -454,7 +505,9 @@ const startManagerApi = function () {
   }
 
   const prefix = '/' + (deguOpts.api.prefix || '/').replace(/^\//, '')
-  console.log(`Info: Starting web management API port: "${deguOpts.api.port}" prefix: "${prefix}" ...`)
+  console.log(`Info: Starting status web server on http://0.0.0.0:${deguOpts.api.port}${prefix} ...`)
+
+  const normalizeUrl = x => x.replace(/\/{2,}/g, '/').replace(/(^\/+|\/+$)/g, '')
 
   let whitelist = deguOpts.api.whitelist
   if (typeof whitelist === 'string') {
@@ -467,36 +520,41 @@ const startManagerApi = function () {
 
     if (whitelist && whitelist.length > 0) {
       if (whitelist.indexOf(ip) === -1) {
-        response.end('ERROR: IP not allowed.')
+        response.statusCode = 403
+        response.end('Permission denied.')
         console.error(`Warning: Rejected API request url=${request.url} ip=${ip}.`)
         return
       }
     }
 
     let reqUrl = url.parse(request.url, true)
+    reqUrl.pathname = normalizeUrl(reqUrl.pathname)
 
-    if (request.method === 'GET' && reqUrl.pathname === prefix) {
+    if (request.method === 'GET' && reqUrl.pathname === normalizeUrl(prefix)) {
+      let remoteSanitized = remote
+      remoteSanitized.url = remoteSanitized.url.replace(/(\w+:\/\/)?([^/]*):([^/]*)@/, '$1$2:<password>@')
       response.setHeader('Content-Type', 'application/json')
       response.end(JSON.stringify({
         runId: runId,
-        revision: revisionIdLocal,
         uptime: (((new Date()) - time) / 1000).toFixed(3).toString(),
         env: process.env,
         deguOpts: deguOpts,
-        remote: remote
+        remote: remote,
+        remoteRevision: revisionIdLocal
       }, null, 2))
-    } else if (request.method === 'POST' && reqUrl.pathname === prefix + 'exit') {
+    } else if (request.method === 'POST' && reqUrl.pathname === normalizeUrl(prefix + 'exit')) {
       response.end('OK: Exiting ...')
       console.log(`Info: Receiving exit signal delay=${reqUrl.query.delay || 0} code=${reqUrl.query.code || 0}`)
       if (reqUrl.query.delay) {
         setTimeout(() => {
           exit(reqUrl.query.code)
-        }, reqUrl.query.delay * 1000)
+        }, calculateInterval(reqUrl.query.delay) * 1000)
       } else {
         exit(reqUrl.query.code)
       }
     } else {
       console.error(`Warning: Received invalid commant ${request.method} ${request.url}`)
+      response.statusCode = 404
       response.end('ERROR: No such command.')
     }
   })
@@ -517,16 +575,16 @@ const startPuller = function () {
   const checker = function () {
     let revisionIdRemote = ''
 
-    if (remote.type === 'git') {
+    if (remote.type === 'GIT') {
       revisionIdRemote = childProcess.spawnSync('git',
         ['ls-remote', 'origin', remote.branch],
         {
           cwd: appDir
         }).stdout.toString().trim()
       revisionIdRemote = (revisionIdRemote || '').split(/\s+/).shift()
-    } else if (remote.type === 'archive') {
+    } else if (remote.type === 'ARCHIVE') {
       revisionIdRemote = getUrlHash(remote.url)
-    } else if (remote.type === 'svn') {
+    } else if (remote.type === 'SVN') {
       revisionIdRemote = childProcess.spawnSync('svn',
         ['info', '--show-item', 'revision', remote.url],
         {
@@ -541,16 +599,17 @@ const startPuller = function () {
   }
 
   // setup interval
-  console.log(`Info: Starting codebase puller with interval of ${deguOpts.puller.interval}sec. ...`)
-  setInterval(checker, deguOpts.puller.interval * 1000)
+  console.log(`Info: Starting codebase puller every ${deguOpts.puller.interval} ...`)
+  setInterval(checker, calculateInterval(deguOpts.puller.interval) * 1000)
 }
 
 console.log(`Info: App is starting up #${runId} ...`)
 
+// Check ssh_key
+checkPrivateKey()
+
 // Update codebase.
 updateCodebase()
-
-console.log(`Info: Codebase revision: "${revisionIdLocal}"`)
 
 // Reload file.
 loadDeguFileOpts()
@@ -561,11 +620,11 @@ if (!(fs.existsSync(path.join(appDir, 'package.json')) || fs.existsSync(deguFile
   process.exit(1)
 }
 
+// Start main process.
+start()
+
 // Start web managemenet API.
 startManagerApi()
 
 // Start the puller
 startPuller()
-
-// Start main process.
-start()
